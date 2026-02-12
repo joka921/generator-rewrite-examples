@@ -1,0 +1,60 @@
+#include <iostream>
+#include <ostream>
+
+#include "./coroutine_frame.h"
+#include "./generator.h"
+#include "macros.h"
+
+generator<int, Handle> iota(int start, int end)
+{
+    using promise_type = generator<int, Handle>::promise_type;
+    struct CoroFrame : CoroImpl<CoroFrame, promise_type, true>
+    {
+        int start_;
+        int end_;
+        coro_storage<SuspendAlways&, true> awaiter_;
+        CoroFrame(int s, int e) : start_(s), end_(e) {}
+
+        void doStepImpl()
+        {
+            switch (this->curState)
+            {
+            case 0: break;
+            case 1: goto label_1;
+            }
+
+            CO_GET(initial_awaiter_).await_resume();
+            initial_awaiter_.destroy();
+            while (start_ < end_)
+            {
+                CO_YIELD(1, awaiter_, (start_) );
+                ++start_;
+            }
+            CO_RETURN_VOID(2, final_awaiter_);
+        }
+
+        void destroySuspendedCoro(size_t curState)
+        {
+            switch (curState)
+            {
+            case 0:
+                this->final_awaiter_.destroy();
+                return;
+            case 1:
+                awaiter_.destroy();
+            case 2:
+                // TODO Figure out what the semantics of the supend destruction at the returning points are.
+                return;
+            }
+
+        }
+    };
+    return CoroFrame::ramp(start, end);
+}
+
+int main() {
+    for (auto i : iota(3000, 3042))
+    {
+        std::cout << i << std::endl;
+    }
+}

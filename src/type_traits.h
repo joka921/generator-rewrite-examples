@@ -98,5 +98,22 @@ namespace coro_detail
     struct has_promise_delete_unsized<P,
                 std::void_t<decltype(P::operator delete(std::declval<void *>()))>>
             : std::true_type {};
+
+
+    // Allocate the coroutine frame using the promise type's operator new if available.
+    // Per the C++ spec, the fallback chain is:
+    //   1. P::operator new(size, args...) — with coroutine arguments
+    //   2. P::operator new(size)          — without coroutine arguments
+    //   3. ::operator new(size)           — global
+    template<typename P, typename... Args>
+    void *promise_allocate(size_t size, Args&&... args) {
+        if constexpr (sizeof...(Args) > 0 && has_promise_new_with_args<P, Args...>::value) {
+            return P::operator new(size, std::forward<Args>(args)...);
+        } else if constexpr (has_promise_new<P>::value) {
+            return P::operator new(size);
+        } else {
+            return ::operator new(size);
+        }
+    }
 }
 #endif //GENERATOR_REWRITE_EXAMPLES_TYPE_TRAITS_H
