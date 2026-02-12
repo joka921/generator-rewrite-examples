@@ -28,11 +28,6 @@ struct CoroImpl {
     static constexpr size_t CO_NO_TRY_BLOCK = static_cast<size_t>(-1);
     size_t currentTryBlock_ = CO_NO_TRY_BLOCK;
 
-    // Boolean values to indicate whether the coroutine is done, or whether it is suspended at the final suspension point.
-    // TODO Get rid of them, this information is redundant.
-    bool done_ = false;
-    bool atFinalSuspend_ = false;
-
     // Buffers for the `initial_suspend()` and `final_suspend()` awaiters.
     coro_storage<decltype(std::declval<PromiseType&>().initial_suspend())&, true> initial_awaiter_;
     coro_storage<decltype(std::declval<PromiseType&>().final_suspend())&, true> final_awaiter_;
@@ -40,24 +35,39 @@ struct CoroImpl {
     using Hdl = Handle<PromiseType>;
     PromiseType &promise() { return pt; }
 
-    // Helper function to cast a `void*` into a `Derived*`.
-    static auto cast(void *blubb) {
-        return static_cast<Derived *>(reinterpret_cast<CoroImpl *>(
+
+    bool done() const
+    {
+        return frm.resumeFunc == nullptr;
+    }
+    void setDone()
+    {
+        frm.resumeFunc = nullptr;
+    }
+
+    // Helper function to cast the `void*` which is obtained from the `Handle` into a `Derived*`.
+    // That pointer always points to the `resumeFunc` inside the handle frame.
+    static auto fromHandle(void *blubb) -> Derived* {
+        auto res = static_cast<Derived *>(reinterpret_cast<CoroImpl *>(
             reinterpret_cast<char *>(blubb) -
             offsetof(CoroImpl, frm)));
+        return res;
     }
 
     // Type erased `resume` function, needed for the indirect type-erased call through the `handle`.
-    static void resume(void *blubb) { cast(blubb)->doStep(); }
+    static void resume(void *blubb) { fromHandle(blubb)->doStep(); }
 
     // Type erased `destroy` function.
     static void destroy(void *blubb) {
-        auto *self = cast(blubb);
-        // If the coroutine is currently suspended but not yet done, we first have to destroy the local variables inside
+        auto *self = fromHandle(blubb);
+        // If the coroutine is currently suspended at a suspension point that is not the final suspension point, we first have to destroy the local variables inside
         // the coroutine frame.
-        if (!self->done_) {
+        if (!self->done()) {
             self->destroySuspendedCoro(self->curState);
-        } else if (self->atFinalSuspend_) {
+        } else {
+            // The coroutine is suspended at its final suspension point, local variables already have been destroyed,
+            // but the final_awaiter_ still exists.
+            self->final_awaiter_.get().ref_.await_resume();
             self->final_awaiter_.destroy();
         }
         // Delete the `Derived` object itself (it was allocated on the heap via the `ramp()` below.
@@ -73,17 +83,11 @@ struct CoroImpl {
         }
     }
 
-    static bool done(void *blubb) {
-        return cast(blubb)->done_;
-    }
-
     // Constructor, set up the function pointers at the beginning of the frame.
     CoroImpl() {
         CHECK();
-        frm.target = this;
         frm.resumeFunc = &CoroImpl::resume;
         frm.destroyFunc = &CoroImpl::destroy;
-        frm.doneFunc = &CoroImpl::done;
     }
 
     Derived& derived() {return *static_cast<Derived*>(this);}
@@ -125,7 +129,7 @@ struct CoroImpl {
         nextState = derived().dispatchExceptionHandling(std::move(eptr));
 
         // Exception was caught inside the class, just resume normal exection.
-        if (!done_) {
+        if (!done()) {
             derived().doStep();
         }
     }

@@ -5,6 +5,19 @@
 #include "./generator.h"
 #include "macros.h"
 
+/**
+ * A simple `iota` generator, direct replacement of
+ *   generator<int, std::coroutine_handle> iota(int start, int end) {
+ *     while (start < end) {
+ *       co_yield start;
+ *       ++start;
+ *     }
+ *   }
+ *
+ * @param start
+ * @param end
+ * @return
+ */
 generator<int, Handle> iota(int start, int end)
 {
     using promise_type = generator<int, Handle>::promise_type;
@@ -12,8 +25,10 @@ generator<int, Handle> iota(int start, int end)
     {
         int start_;
         int end_;
-        coro_storage<SuspendAlways&, true> awaiter_;
-        CoroFrame(int s, int e) : start_(s), end_(e) {}
+
+        CoroFrame(int s, int e) : start_(s), end_(e)
+        {
+        }
 
         void doStepImpl()
         {
@@ -27,7 +42,7 @@ generator<int, Handle> iota(int start, int end)
             initial_awaiter_.destroy();
             while (start_ < end_)
             {
-                CO_YIELD(1, awaiter_, (start_) );
+                CO_YIELD(1, initial_awaiter_, (start_));
                 ++start_;
             }
             CO_RETURN_VOID(2, final_awaiter_);
@@ -38,21 +53,21 @@ generator<int, Handle> iota(int start, int end)
             switch (curState)
             {
             case 0:
-                this->final_awaiter_.destroy();
+                this->initial_awaiter_.destroy();
                 return;
             case 1:
-                awaiter_.destroy();
+                this->initial_awaiter_.destroy();
             case 2:
-                // TODO Figure out what the semantics of the supend destruction at the returning points are.
+                // Nothing to destroy at the `co_return` point, as there are no local variables in scope at that point.
                 return;
             }
-
         }
     };
     return CoroFrame::ramp(start, end);
 }
 
-int main() {
+int main()
+{
     for (auto i : iota(3000, 3042))
     {
         std::cout << i << std::endl;

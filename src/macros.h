@@ -40,14 +40,10 @@ this->curState = index;                                                      \
     CO_RESUME(index, awaiterMem);
 
 #define CO_RETURN_IMPL_IMPL(finalAwaiterMem, ...)                                  \
-this->done_ = true;                                                          \
-this->atFinalSuspend_ = true;                                                \
+this->setDone();                                                          \
 CO_STORAGE_CONSTRUCT(this->finalAwaiterMem, (promise().final_suspend()));                  \
 CO_AWAIT_IMPL_IMPL(this->finalAwaiterMem.get().ref_, Hdl::from_promise(pt), __VA_ARGS__);                                              \
-CO_GET(finalAwaiterMem).await_resume();                                      \
-this->finalAwaiterMem.destroy();                                             \
-this->atFinalSuspend_ = false;                                               \
-Hdl::from_promise(pt).destroy();                                             \
+this->destroy(&this->frm);                      \
 void()
 
 #define CO_RETURN_IMPL(index, finalAwaiterMem)                                  \

@@ -4,15 +4,14 @@
 
 #include <cstddef>
 
-// A type-erased "base" class for a coroutine frame, consists of three function pointers to implement
+// A type-erased "base" class for a coroutine frame, consists of two function pointers to implement
 // the member functions of the `CoroutineHandle` replacement below.
+// This is exactly the layout GCC uses internally.
 struct HandleFrame {
     using F = void(void *);
     using B = bool(void *);
-    void *target;
     F *resumeFunc;
     F *destroyFunc;
-    B *doneFunc;
 };
 
 // A replacement for `std::coroutine_handle`. Consists of a single pointer to the `HandleFrame` from above, to which it
@@ -30,10 +29,10 @@ struct Handle {
     Handle& operator=(std::nullptr_t) noexcept { ptr = nullptr; return *this;}
 
     // resume, done, destroy, and operator bool just use the indirection to the `HandleFrame`.
-    void resume() { ptr->resumeFunc(ptr->target); }
+    void resume() { ptr->resumeFunc(reinterpret_cast<void*>(ptr)); }
+    void destroy() { ptr->destroyFunc(reinterpret_cast<void*>(ptr)); }
     operator bool() const { return static_cast<bool>(ptr); }
-    bool done() const { return ptr->doneFunc(ptr->target); }
-    void destroy() { ptr->destroyFunc(ptr->target); }
+    bool done() const { return ptr->resumeFunc == nullptr; }
 
     //  Only for non-void `Promise` types: convert from promise to handle and back.
     //  Assumes that in our final coroutine frame the promise object will be declared directly after the
