@@ -1,6 +1,7 @@
 #ifndef GENERATOR_REWRITE_EXAMPLES_MACROS_H
 #define GENERATOR_REWRITE_EXAMPLES_MACROS_H
 
+// helper macros that are used inside the `CoroImpl` and coroutine frames that inherit from `CoroImpl` (see coroutine_frame.h).
 #define CO_AWAIT_IMPL_IMPL(awaiterInput, handle, ...) \
 { \
   auto& awaiter = awaiterInput; \
@@ -19,7 +20,7 @@
 } \
 } \
 } void()
-#define CO_AWAIT_IMPL(awaiterMem) CO_AWAIT_IMPL_IMPL(CO_GET(awaiterMem), Hdl::from_promise(pt))
+#define CO_AWAIT_IMPL(awaiterMem) CO_AWAIT_IMPL_IMPL(CO_GET(awaiterMem), CoroFrameBase::Hdl::from_promise(this->promise()))
 
 #define CO_RESUME(index, awaiterMem) \
   label_##index:                                                       \
@@ -27,22 +28,22 @@
   this->awaiterMem.destroy();
 
 #define CO_YIELD(index, awaiterMem, value)                            \
-    CO_STORAGE_CONSTRUCT(this->awaiterMem, (promise().yield_value(value)));           \
+    CO_STORAGE_CONSTRUCT(this->awaiterMem, (this->promise().yield_value(value)));           \
     this->curState = index;                                            \
     CO_AWAIT_IMPL(awaiterMem); \
     CO_RESUME(index, awaiterMem);
 
 #define CO_AWAIT_VOID(index, awaiterMem, expr)                                  \
 {                                                                              \
-this->awaiterMem.construct(coro_detail::get_awaitable(promise(), expr));      \
+this->awaiterMem.construct(coro_detail::get_awaitable(this->promise(), expr));      \
 this->curState = index;                                                      \
     CO_AWAIT_IMPL(awaiterMem);                                                \
     CO_RESUME(index, awaiterMem);
 
 #define CO_RETURN_IMPL_IMPL(finalAwaiterMem, ...)                                  \
 this->setDone();                                                          \
-CO_STORAGE_CONSTRUCT(this->finalAwaiterMem, (promise().final_suspend()));                  \
-CO_AWAIT_IMPL_IMPL(this->finalAwaiterMem.get().ref_, Hdl::from_promise(pt), __VA_ARGS__);                                              \
+CO_STORAGE_CONSTRUCT(this->finalAwaiterMem, (this->promise().final_suspend()));                  \
+CO_AWAIT_IMPL_IMPL(this->finalAwaiterMem.get().ref_, CoroFrameBase::Hdl::from_promise(this->promise()), __VA_ARGS__);                                              \
 this->destroy(&this->frm);                      \
 void()
 
@@ -53,8 +54,8 @@ void()
   void()
 
 #define CO_RETURN_VOID(index, finalAwaiterMem)                                  \
-    if constexpr (coro_detail::has_return_void<std::decay_t<decltype(promise())>>::value) { \
-    promise().return_void();                                                     \
+    if constexpr (coro_detail::has_return_void<std::decay_t<decltype(this->promise())>>::value) { \
+    this->promise().return_void();                                                     \
     }                                                                             \
     CO_RETURN_IMPL(index, finalAwaiterMem);                                     \
     void()
@@ -88,16 +89,7 @@ void()
 #define CO_PAREN_INIT(mem, ...) CO_INIT_REF(mem, __VA_ARGS__)
 
 #define CO_INIT(mem, ...) \
-[&](auto& member) -> decltype(auto) { \
-using M = std::decay_t<decltype(member)>; \
-if constexpr (M::isOwning) { \
-new(member.buffer) typename M::Storage __VA_ARGS__; \
-} else { \
-new(member.buffer) typename M::Storage{ coro_detail::dependent_addressof<M>(__VA_ARGS__)} ;\
-} \
-this->__constructed.mem=true; \
-return std::move(CO_GET(mem)); \
-}(this->mem)
+  CO_STORAGE_CONSTRUCT(this->mem, __VA_ARGS__);
 
 
 

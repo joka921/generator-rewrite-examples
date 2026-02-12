@@ -1,6 +1,7 @@
 #ifndef GENERATOR_REWRITE_EXAMPLES_CORO_STORAGE_H
 #define GENERATOR_REWRITE_EXAMPLES_CORO_STORAGE_H
 
+#include <sanitizer/asan_interface.h>
 // Implementation of a local variable storage inside a coroutine frame.
 // Is templated on the reference type of the local variable, and the
 // information on whether the storage is owning the variable, or just storing a pointer.
@@ -25,7 +26,7 @@ struct coro_storage {
         Ref ref_;
     };
     Proxy get() {
-        Storage &storage = *reinterpret_cast<Storage *>(buffer);
+        Storage &storage = *std::launder(reinterpret_cast<Storage *>(buffer));
         if constexpr (isOwning) {
             return Proxy{static_cast<Ref>(storage)};
         } else {
@@ -37,7 +38,7 @@ struct coro_storage {
     // Note: We deliberately don't provide a `construct` method, but the using code should
     // use `placement new` directly on the buffer to not break copy elision.
     void destroy() {
-        reinterpret_cast<Storage *>(buffer)->~Storage();
+        std::launder(reinterpret_cast<Storage *>(buffer))->~Storage();
     }
 };
 
@@ -60,8 +61,10 @@ namespace detail {
   using M = std::decay_t<decltype(storageArg)>; \
   if constexpr (M::isOwning) { \
     new(storageArg.buffer) typename M::Storage __VA_ARGS__; \
+    ASAN_UNPOISON_MEMORY_REGION(storageArg.buffer, sizeof(typename M::Storage)); \
    } else { \
      new(storageArg.buffer) typename M::Storage{ detail::dependent_addressof<M>(__VA_ARGS__)} ;\
+    ASAN_UNPOISON_MEMORY_REGION(storageArg.buffer, sizeof(typename M::Storage)); \
   } \
 }(storage)
 
