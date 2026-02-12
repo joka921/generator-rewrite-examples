@@ -56,4 +56,37 @@ struct Handle {
     }
 };
 
+// Handle<void> specialization — type-erased handle without promise access.
+template<>
+struct Handle<void> {
+    HandleFrame *ptr;
+
+    Handle() noexcept : ptr(nullptr) {}
+    Handle(HandleFrame *ptr) noexcept : ptr(ptr) {}
+
+    // Converting constructor: enables implicit Handle<P> -> Handle<void>.
+    template<typename P>
+    Handle(Handle<P> other) noexcept : ptr(other.ptr) {}
+
+    Handle& operator=(const Handle&) = default;
+    Handle(const Handle&) = default;
+    Handle(Handle&&) = default;
+    Handle& operator=(Handle&&) = default;
+    Handle& operator=(std::nullptr_t) noexcept { ptr = nullptr; return *this; }
+
+    void resume() { ptr->resumeFunc(reinterpret_cast<void*>(ptr)); }
+    void destroy() { ptr->destroyFunc(reinterpret_cast<void*>(ptr)); }
+    operator bool() const { return static_cast<bool>(ptr); }
+    bool done() const { return ptr->resumeFunc == nullptr; }
+};
+
+// Equivalent of std::noop_coroutine() — returns a Handle<void> that does nothing on resume/destroy.
+inline Handle<void> noop_coroutine() {
+    static HandleFrame noop_frame{
+        [](void*) {},
+        [](void*) {}
+    };
+    return Handle<void>{&noop_frame};
+}
+
 #endif //GENERATOR_REWRITE_EXAMPLES_COROUTINE_HANDLE_H

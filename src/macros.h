@@ -13,9 +13,9 @@
   } else if constexpr (std::is_same_v<type, bool>) { \
     if (! [&](auto& awaiter) {if constexpr (std::is_same_v<type, bool>) return awaiter.await_suspend(handle); return true;}(awaiter)) { return __VA_ARGS__; } \
 } else { \
-/* TODO encourage tail call optimization for empty `__VA_ARGS__`*/ \
-  throw std::runtime_error("not yet implemented"); \
-  /*awaiter.await_suspend(handle).resume(); */ \
+/* Symmetric transfer: the generic lambda + inner if-constexpr ensures the */ \
+/* .resume() call is only instantiated when await_suspend returns a handle. */ \
+  [&](auto& aw) { if constexpr (!std::is_void_v<type> && !std::is_same_v<type, bool>) { aw.await_suspend(handle).resume(); } }(awaiter); \
   return __VA_ARGS__; \
 } \
 } \
@@ -66,7 +66,7 @@ void()
 #define CO_RETURN_FALLOFF(index, finalAwaiterMem) CO_RETURN_VOID(index, finalAwaiterMem)
 
 #define CO_RETURN_VALUE(index, finalAwaiterMem, value)                           \
-    promise().return_value(value);                                               \
+    this->promise().return_value(value);                                               \
     CO_RETURN_IMPL(index, finalAwaiterMem);                                       \
     void()
 

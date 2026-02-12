@@ -1,30 +1,7 @@
 #ifndef GENERATOR_REWRITE_EXAMPLES_GENERATOR_H
 #define GENERATOR_REWRITE_EXAMPLES_GENERATOR_H
 
-    // Drop-in replacement for `std::suspend_always` and `std::suspend_never` from C++20.
-    // As we will use them with our own `coroutine_handle` types, the `await_suspend` function
-    // is templated.
-    struct SuspendAlways {
-        static constexpr bool await_ready() noexcept { return false; }
-
-        template<typename Handle>
-        static constexpr void await_suspend([[maybe_unused]] Handle handle) noexcept {
-        }
-
-        static constexpr void await_resume() noexcept {
-        }
-    };
-
-struct SuspendNever {
-    static constexpr bool await_ready() noexcept { return true; }
-
-    template<typename Handle>
-    static constexpr void await_suspend([[maybe_unused]] Handle handle) noexcept {
-    }
-
-    static constexpr void await_resume() noexcept {
-    }
-};
+#include "./suspend.h"
 
  // A simple generator class. It is templated on the used `Handle` type, so we can either use it with `std::coroutine_handle`, or with our own.
     template<typename T,

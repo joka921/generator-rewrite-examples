@@ -99,6 +99,7 @@ struct CoroImpl {
         } else
         {
             try {
+                derived().doStepImpl();
             } catch (...) { handleException(std::current_exception(), curState); }
         }
     }
