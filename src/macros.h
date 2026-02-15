@@ -44,7 +44,7 @@ this->curState = index;                                                      \
 this->setDone();                                                          \
 CO_STORAGE_CONSTRUCT(this->finalAwaiterMem, (this->promise().final_suspend()));                  \
 CO_AWAIT_IMPL_IMPL(this->finalAwaiterMem.get().ref_, CoroFrameBase::Hdl::from_promise(this->promise()), __VA_ARGS__);                                              \
-this->destroy(&this->frm);                      \
+this->destroy();                      \
 void()
 
 #define CO_RETURN_IMPL(index, finalAwaiterMem)                                  \

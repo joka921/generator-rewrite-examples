@@ -83,6 +83,32 @@ struct CoroImpl {
         }
     }
 
+    // Type erased `destroy` function.
+    void destroy() {
+        auto *self = &derived();
+        // If the coroutine is currently suspended at a suspension point that is not the final suspension point, we first have to destroy the local variables inside
+        // the coroutine frame.
+        if (!self->done()) {
+            self->destroySuspendedCoro(self->curState);
+        } else {
+            // The coroutine is suspended at its final suspension point, local variables already have been destroyed,
+            // but the final_awaiter_ still exists.
+            self->final_awaiter_.get().ref_.await_resume();
+            self->final_awaiter_.destroy();
+        }
+        // Delete the `Derived` object itself (it was allocated on the heap via the `ramp()` below.
+        if constexpr (coro_detail::has_promise_delete<PromiseType>::value) {
+            self->~Derived();
+            PromiseType::operator delete(
+                static_cast<void *>(self), sizeof(Derived));
+        } else if constexpr (coro_detail::has_promise_delete_unsized<PromiseType>::value) {
+            self->~Derived();
+            PromiseType::operator delete(static_cast<void *>(self));
+        } else {
+            delete self;
+        }
+    }
+
     // Constructor, set up the function pointers at the beginning of the frame.
     CoroImpl() {
         CHECK();
