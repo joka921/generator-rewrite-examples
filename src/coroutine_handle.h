@@ -14,26 +14,31 @@ struct HandleFrame {
     F *destroyFunc;
 };
 
-// A replacement for `std::coroutine_handle`. Consists of a single pointer to the `HandleFrame` from above, to which it
-// delegates all the member functions.
-template<typename Promise = void>
-struct Handle {
+// Common base class for `Handle<void>`  and Handle<some_promise_type>` below.
+struct HandleBase {
     HandleFrame *ptr;
 
-    // Construction and assignment.
-    Handle(HandleFrame *ptr) noexcept : ptr(ptr) {}
-    Handle& operator=(const Handle&) = default;
-    Handle(const Handle&) = default;
-    Handle(Handle&&) = default;
-    Handle& operator=(Handle&&) = default;
-    Handle& operator=(std::nullptr_t) noexcept { ptr = nullptr; return *this;}
+    HandleBase() noexcept : ptr(nullptr) {}
+    HandleBase(HandleFrame *ptr) noexcept : ptr(ptr) {}
 
-    // resume, done, destroy, and operator bool just use the indirection to the `HandleFrame`.
+    HandleBase& operator=(const HandleBase&) = default;
+    HandleBase(const HandleBase&) = default;
+    HandleBase(HandleBase&&) = default;
+    HandleBase& operator=(HandleBase&&) = default;
+    HandleBase& operator=(std::nullptr_t) noexcept { ptr = nullptr; return *this; }
+
     void resume() { ptr->resumeFunc(reinterpret_cast<void*>(ptr)); }
     void destroy() { ptr->destroyFunc(reinterpret_cast<void*>(ptr)); }
     operator bool() const { return static_cast<bool>(ptr); }
     bool done() const { return ptr->resumeFunc == nullptr; }
+};
 
+// A replacement for `std::coroutine_handle`. Consists of a single pointer to the `HandleFrame` from above, to which it
+// delegates all the member functions.
+template<typename Promise>
+struct Handle : public HandleBase {
+    using HandleBase::HandleBase;
+    using HandleBase::operator=;
     //  Only for non-void `Promise` types: convert from promise to handle and back.
     //  Assumes that in our final coroutine frame the promise object will be declared directly after the
     // `HandleFrame` above.
@@ -58,26 +63,9 @@ struct Handle {
 
 // Handle<void> specialization — type-erased handle without promise access.
 template<>
-struct Handle<void> {
-    HandleFrame *ptr;
-
-    Handle() noexcept : ptr(nullptr) {}
-    Handle(HandleFrame *ptr) noexcept : ptr(ptr) {}
-
-    // Converting constructor: enables implicit Handle<P> -> Handle<void>.
-    template<typename P>
-    Handle(Handle<P> other) noexcept : ptr(other.ptr) {}
-
-    Handle& operator=(const Handle&) = default;
-    Handle(const Handle&) = default;
-    Handle(Handle&&) = default;
-    Handle& operator=(Handle&&) = default;
-    Handle& operator=(std::nullptr_t) noexcept { ptr = nullptr; return *this; }
-
-    void resume() { ptr->resumeFunc(reinterpret_cast<void*>(ptr)); }
-    void destroy() { ptr->destroyFunc(reinterpret_cast<void*>(ptr)); }
-    operator bool() const { return static_cast<bool>(ptr); }
-    bool done() const { return ptr->resumeFunc == nullptr; }
+struct Handle<void> : public HandleBase {
+    using HandleBase::HandleBase;
+    using HandleBase::operator=;
 };
 
 // Equivalent of std::noop_coroutine() — returns a Handle<void> that does nothing on resume/destroy.
@@ -88,5 +76,34 @@ inline Handle<void> noop_coroutine() {
     };
     return Handle<void>{&noop_frame};
 }
+
+// A fat coroutine handle that is templated on the frame of a certain coroutine and stores this frame by value without any heap allocations.
+template<typename CoroFrame>
+struct InlineHandle {
+    CoroFrame frame;
+
+    explicit InlineHandle(CoroFrame&& f) noexcept : frame(std::move(f)) {}
+
+    // Move constructor — invalidates the source to prevent double-destroy.
+    InlineHandle(InlineHandle&& other) = default;
+
+    InlineHandle& operator=(InlineHandle&& other) noexcept  = default;
+
+    // Note: The destructor does not call ` frame.destroy()` , this is the responsibility
+    // of the coroutine type (e.g. a generator) that owns the handle (same as for ordinary stackelss coroutines).
+    ~InlineHandle() = default;
+
+    InlineHandle(const InlineHandle&) = delete;
+    InlineHandle& operator=(const InlineHandle&) = delete;
+
+    // Direct call, no function pointer indirection.
+    void resume() { frame.doStep(); }
+    void destroy() { frame.destroy(); }
+    bool done() const { return frame.done(); }
+    explicit constexpr operator bool() const { return true; }
+    auto& promise() { return frame.promise(); }
+    const auto& promise() const { return frame.pt; }
+};
+
 
 #endif //GENERATOR_REWRITE_EXAMPLES_COROUTINE_HANDLE_H

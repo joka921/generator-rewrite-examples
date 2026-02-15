@@ -8,7 +8,6 @@
 #include <utility>
 #include "./suspend.h"
 #include "./coroutine_handle.h"
-#include "./inline_handle.h"
 #include "./coro_storage.h"
 
 // Forward declarations
@@ -225,6 +224,9 @@ public:
     ~unified_generator() {
         if constexpr (Policy::nullable) {
             if (m_handle) m_handle.destroy();
+        } else
+        {
+            m_handle.destroy();
         }
         // For inline: InlineHandle destructor handles cleanup via frame.destroy()
     }
