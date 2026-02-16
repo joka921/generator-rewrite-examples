@@ -31,6 +31,12 @@ struct HandleBase {
     void destroy() { ptr->destroyFunc(reinterpret_cast<void*>(ptr)); }
     operator bool() const { return static_cast<bool>(ptr); }
     bool done() const { return ptr->resumeFunc == nullptr; }
+
+    static void resumeTypeErased(void* ptr)
+    {
+        auto* handle = reinterpret_cast<HandleBase*>(ptr);
+        [[clang::musttail]] return handle->ptr->resumeFunc(reinterpret_cast<void*>(handle->ptr));
+    }
 };
 
 // A replacement for `std::coroutine_handle`. Consists of a single pointer to the `HandleFrame` from above, to which it
@@ -103,6 +109,7 @@ struct InlineHandle {
     explicit constexpr operator bool() const { return true; }
     auto& promise() { return frame.promise(); }
     const auto& promise() const { return frame.pt; }
+
 };
 
 

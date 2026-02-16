@@ -182,8 +182,8 @@ public:
     }
 
     // C++17 equivalent of operator co_await.
-    detail::task_awaiter<T, TaskHandle> get_awaiter() {
-        return detail::task_awaiter<T, TaskHandle>{coro_};
+    friend  auto get_awaiter(const task& t) {
+        return detail::task_awaiter<T, TaskHandle>{t.coro_};
     }
 
 private:

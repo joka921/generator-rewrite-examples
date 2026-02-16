@@ -25,16 +25,36 @@ namespace coro_detail
             : std::true_type {
     };
 
+    template<typename Awaitable, typename = void>
+    struct has_get_awaiter : std::false_type {
+    };
+
+    template<typename Awaitable>
+    struct has_get_awaiter<Awaitable,
+                std::void_t<decltype(get_awaiter(std::declval<Awaitable>()))>>
+            : std::true_type {
+    };
+
     // Given a `promise` and a `co_await`ed expression, get the actual `awaitable`, possibly through the `await_transform` mechanism.
     // NOTE: We currently deliberately ignore the possibility of `operator co_await` being present. This might be fixed
     // Until C++Now.
     template<typename Promise, typename Expr>
-    decltype(auto) get_awaitable(Promise &promise, Expr &&expr) {
+    decltype(auto) get_awaiter(Promise &promise, Expr &&expr) {
         // TODO what about co_await <something that is void>)
-        if constexpr (has_await_transform<Promise>::value) {
-            return promise.await_transform(std::forward<Expr>(expr));
-        } else {
-            return std::forward<Expr>(expr);
+        decltype(auto) awaitable = [&]() ->decltype(auto)
+        {
+            if constexpr (has_await_transform<Promise>::value) {
+                return promise.await_transform(std::forward<Expr>(expr));
+            } else {
+                return std::forward<Expr>(expr);
+            }
+        }();
+        if constexpr (has_get_awaiter<decltype(awaitable)>::value)
+        {
+            return get_awaiter(std::forward<decltype(awaitable)>(awaitable));
+        } else
+        {
+            return awaitable;
         }
     }
 

@@ -55,7 +55,7 @@ struct CoroImpl {
     }
 
     // Type erased `resume` function, needed for the indirect type-erased call through the `handle`.
-    static void resume(void *blubb) { fromHandle(blubb)->doStep(); }
+    static void resume(void *blubb) { [[clang::musttail]] return doStep(fromHandle(blubb)); }
 
     // Type erased `destroy` function.
     static void destroy(void *blubb) {
@@ -118,16 +118,25 @@ struct CoroImpl {
 
     Derived& derived() {return *static_cast<Derived*>(this);}
 
-    void doStep() noexcept(isNoexcept) {
+    static void doStep(void* ptrToDerived) /*noexcept(isNoexcept)*/ {
+        [[clang::musttail]] return Derived::doStepImpl(ptrToDerived);
+        //[[clang::musttail]] return Derived::doStepImpl(static_cast<Derived*>(ptrToDerived));
+        /*
         if constexpr (isNoexcept)
         {
-            derived().doStepImpl();
+            [[clang::musttail]] return Derived::doStepImpl(static_cast<Derived*>(ptrToDerived));
         } else
         {
             try {
-                derived().doStepImpl();
-            } catch (...) { handleException(std::current_exception(), curState); }
+                return Derived::doStepImpl(ptrToDerived);
+            } catch (...)
+            {
+
+                 auto& derived = *static_cast<Derived*>(ptrToDerived);
+                derived.handleException(std::current_exception(), derived.curState);
+            }
         }
+        */
     }
 
     // The coroutine `ramp` function. Gets the arguments to the coroutine, and returns the coroutine object
@@ -145,7 +154,7 @@ struct CoroImpl {
         CO_AWAIT_IMPL_IMPL(frame->initial_awaiter_.get().ref_, Handle<PromiseType>::from_promise(frame->pt), ret);
         // If we reach here, the coroutine was not suspended (likely because of `suspend_never`, so we directly
         // run the coroutine and return the `ret` once it first suspends.
-        frame->doStep();
+        frame->doStep(frame);
         return ret;
     }
 
