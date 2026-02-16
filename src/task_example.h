@@ -20,7 +20,7 @@ inline task<size_t, Handle> compute_value(size_t x)
 
         CoroFrame(size_t x) : x_(x) {}
 
-        static void doStepImpl(void* selfPtr)
+        static Handle<void> doStepImpl(void* selfPtr)
         {
             auto* self = static_cast<CoroFrame*>(selfPtr);
             switch (self->curState)
@@ -61,7 +61,7 @@ inline task<size_t, Handle> compute_value(size_t x)
 inline task<size_t, Handle> add_values(size_t a, size_t b)
 {
     using promise_type = task<size_t, Handle>::promise_type;
-    struct CoroFrame : CoroImpl<CoroFrame, promise_type, true>
+    struct CoroFrame : CoroImpl<CoroFrame, promise_type, false>
     {
         using CoroFrameBase = CoroImpl<CoroFrame, promise_type, true>;
         size_t a_;
@@ -76,7 +76,13 @@ inline task<size_t, Handle> add_values(size_t a, size_t b)
 
         CoroFrame(size_t a, size_t b) : a_(a), b_(b) {}
 
-        static void doStepImpl(void* selfPtr)
+        size_t dispatchExceptionHandling(std::exception_ptr eptr)
+        {
+            // not implemented for now, just checking for the symmetric transfer.
+            std::terminate();
+        }
+
+        static Handle<void> doStepImpl(void* selfPtr)
         {
             auto* self = static_cast<CoroFrame*>(selfPtr);
             switch (self->curState)

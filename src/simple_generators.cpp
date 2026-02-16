@@ -3,19 +3,20 @@
 #include <string>
 
 
-#include "./iota.h"
+#include "./iota_unified.h"
 #include "./string_prepend.h"
 #include "./throwing_parse_ints.h"
 
 
 int main()
 {
-    for (auto i : iota(3000, 3042))
+    for (auto i : iota_unified(3000, 3042))
     {
         std::cout << i << std::endl;
     }
 
-    for (const auto& s : string_prepend(std::array{"strange", "awesome", "stackless", "complicated"}, "very "))
+    auto words = std::array{"strange", "awesome", "stackless", "complicated"};
+    for (const auto& s : string_prepend(words, "very "))
     {
         std::cout << s << std::endl;
     }

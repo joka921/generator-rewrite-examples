@@ -1,6 +1,7 @@
 #ifndef GENERATOR_REWRITE_EXAMPLES_IOTA_UNIFIED_H
 #define GENERATOR_REWRITE_EXAMPLES_IOTA_UNIFIED_H
 
+#include <cassert>
 #include "./coroutine_frame.h"
 #include "./inline_coroutine_frame.h"
 #include "./unified_generator.h"
@@ -27,22 +28,30 @@ auto iota_unified(int start, int end)
         {
         }
 
-        void doStepImpl()
+        static Handle<void> doStepImpl(void* selfPtr)
         {
-            switch (this->curState)
+            auto* self = static_cast<CoroFrame*>(selfPtr);
+            switch (self->curState)
             {
             case 0: break;
             case 1: goto label_1;
             }
 
             CO_GET(initial_awaiter_).await_resume();
-            this->initial_awaiter_.destroy();
-            while (start_ < end_)
+            self->initial_awaiter_.destroy();
+            while (self->start_ < self->end_)
             {
-                CO_YIELD(1, initial_awaiter_, (start_));
-                ++start_;
+                CO_YIELD(1, initial_awaiter_, (self->start_));
+                ++self->start_;
             }
             CO_RETURN_VOID(2, final_awaiter_);
+        }
+
+        // Non-static overload for InlineCoroImpl (inline/stack-allocated path).
+        void doStepImpl()
+        {
+            [[maybe_unused]] auto handle = doStepImpl(static_cast<void*>(this));
+            assert(!handle);
         }
 
         void destroySuspendedCoro(size_t curState)

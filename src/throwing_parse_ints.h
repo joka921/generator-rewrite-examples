@@ -4,7 +4,7 @@
 #include <string>
 #include <exception>
 #include "./coroutine_frame.h"
-#include "./generator.h"
+#include "./unified_generator.h"
 #include "macros.h"
 
 /**
@@ -25,9 +25,9 @@
  * try-catch inside a generator with exception dispatch.
  */
 template <typename RangeOfStrings>
-generator<int, Handle> throwing_parse_ints(RangeOfStrings&& strings, bool catch_errors)
+heap_generator<int> throwing_parse_ints(RangeOfStrings&& strings, bool catch_errors)
 {
-    using promise_type = generator<int, Handle>::promise_type;
+    using promise_type = heap_generator<int>::promise_type;
     struct CoroFrame : CoroImpl<CoroFrame, promise_type, false>
     {
         using CoroFrameBase = CoroImpl<CoroFrame, promise_type, false>;
@@ -53,9 +53,10 @@ generator<int, Handle> throwing_parse_ints(RangeOfStrings&& strings, bool catch_
         //   2  = co_yield inside catch (the -1 fallback)
         //   3  = co_return
         //   10 = catch handler entry
-        void doStepImpl()
+        static Handle<void> doStepImpl(void* selfPtr)
         {
-            switch (this->curState)
+            auto* self = static_cast<CoroFrame*>(selfPtr);
+            switch (self->curState)
             {
             case 0: break;
             case 1: goto label_1;
@@ -64,26 +65,26 @@ generator<int, Handle> throwing_parse_ints(RangeOfStrings&& strings, bool catch_
             }
 
             CO_GET(initial_awaiter_).await_resume();
-            this->initial_awaiter_.destroy();
-            CO_INIT(it_, (strings_.begin()));
-            CO_INIT(end_, (strings_.end()));
+            self->initial_awaiter_.destroy();
+            CO_INIT(it_, (self->strings_.begin()));
+            CO_INIT(end_, (self->strings_.end()));
             for (; CO_GET(it_) != CO_GET(end_); ++CO_GET(it_))
             {
                 // try {
                 TRY_BEGIN(0);
                 CO_INIT(parsed_, (std::stoi(*CO_GET(it_))));
                 CO_YIELD(1, initial_awaiter_, CO_GET(parsed_));
-                parsed_.destroy();
+                self->parsed_.destroy();
                 TRY_END(CoroFrameBase::CO_NO_TRY_BLOCK, try_end_0);
                 continue;
                 // } catch (...) {
                 label_catch_0:
-                if (!catch_errors_) {
-                    std::rethrow_exception(caught_exception_);
+                if (!self->catch_errors_) {
+                    std::rethrow_exception(self->caught_exception_);
                 }
                 CO_INIT(fallback_, (-1));
                 CO_YIELD(2, initial_awaiter_, CO_GET(fallback_));
-                fallback_.destroy();
+                self->fallback_.destroy();
                 // }
             }
             CO_RETURN_VOID(3, final_awaiter_);

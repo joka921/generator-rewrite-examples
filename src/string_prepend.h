@@ -2,7 +2,7 @@
 #define GENERATOR_REWRITE_EXAMPLES_STRING_PREPEND_H
 
 #include "./coroutine_frame.h"
-#include "./generator.h"
+#include "./unified_generator.h"
 #include "macros.h"
 
 /**
@@ -15,9 +15,9 @@
  *
  */
 template <typename RangeOfStrings>
-generator<std::string, Handle> string_prepend(RangeOfStrings&& rangeOfStrings, std::string prefix)
+heap_generator<std::string> string_prepend(RangeOfStrings&& rangeOfStrings, std::string prefix)
 {
-    using promise_type = generator<std::string, Handle>::promise_type;
+    using promise_type = heap_generator<std::string>::promise_type;
     struct CoroFrame : CoroImpl<CoroFrame, promise_type, true>
     {
         using CoroFrameBase = CoroImpl<CoroFrame, promise_type, true>;
@@ -36,23 +36,24 @@ generator<std::string, Handle> string_prepend(RangeOfStrings&& rangeOfStrings, s
         {
         }
 
-        void doStepImpl()
+        static Handle<void> doStepImpl(void* selfPtr)
         {
-            switch (this->curState)
+            auto* self = static_cast<CoroFrame*>(selfPtr);
+            switch (self->curState)
             {
             case 0: break;
             case 1: goto label_1;
             }
 
             CO_GET(initial_awaiter_).await_resume();
-            this->initial_awaiter_.destroy();
-            CO_INIT(it_, (rangeOfStrings_.begin()));
-            CO_INIT(end_, (rangeOfStrings_.end()));
+            self->initial_awaiter_.destroy();
+            CO_INIT(it_, (self->rangeOfStrings_.begin()));
+            CO_INIT(end_, (self->rangeOfStrings_.end()));
             for (; CO_GET(it_) != CO_GET(end_); ++CO_GET(it_))
             {
-                CO_INIT(tmp_, (prefix_ + *CO_GET(it_)));
+                CO_INIT(tmp_, (self->prefix_ + *CO_GET(it_)));
                 CO_YIELD(1, initial_awaiter_, CO_GET(tmp_));
-                tmp_.destroy();
+                self->tmp_.destroy();
             }
             CO_RETURN_VOID(2, final_awaiter_);
         }

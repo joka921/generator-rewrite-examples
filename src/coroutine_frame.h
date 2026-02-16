@@ -55,7 +55,8 @@ struct CoroImpl {
     }
 
     // Type erased `resume` function, needed for the indirect type-erased call through the `handle`.
-    static void resume(void *blubb) { [[clang::musttail]] return doStep(fromHandle(blubb)); }
+    // Returns Handle<void> for the trampoline in HandleBase::resume().
+    static Handle<void> resume(void *blubb) { [[clang::musttail]] return doStep(fromHandle(blubb)); }
 
     // Type erased `destroy` function.
     static void destroy(void *blubb) {
@@ -118,25 +119,21 @@ struct CoroImpl {
 
     Derived& derived() {return *static_cast<Derived*>(this);}
 
-    static void doStep(void* ptrToDerived) /*noexcept(isNoexcept)*/ {
-        [[clang::musttail]] return Derived::doStepImpl(ptrToDerived);
-        //[[clang::musttail]] return Derived::doStepImpl(static_cast<Derived*>(ptrToDerived));
-        /*
+    static Handle<void> doStep(void* ptrToDerived) /*noexcept(isNoexcept)*/ {
         if constexpr (isNoexcept)
         {
-            [[clang::musttail]] return Derived::doStepImpl(static_cast<Derived*>(ptrToDerived));
+            [[clang::musttail]] return Derived::doStepImpl(ptrToDerived);
         } else
         {
+            Handle<void> next;
             try {
                 return Derived::doStepImpl(ptrToDerived);
             } catch (...)
             {
-
-                 auto& derived = *static_cast<Derived*>(ptrToDerived);
-                derived.handleException(std::current_exception(), derived.curState);
+                auto& derived = *static_cast<Derived*>(ptrToDerived);
+                return derived.handleException(std::current_exception(), derived.curState);
             }
         }
-        */
     }
 
     // The coroutine `ramp` function. Gets the arguments to the coroutine, and returns the coroutine object
@@ -151,23 +148,26 @@ struct CoroImpl {
         // Call, store, and `co_await` the `initial_suspend`.
         CO_STORAGE_CONSTRUCT(frame->initial_awaiter_, (frame->pt.initial_suspend()));
         // If the coroutine suspends, return the `ret` to the caller.
-        CO_AWAIT_IMPL_IMPL(frame->initial_awaiter_.get().ref_, Handle<PromiseType>::from_promise(frame->pt), ret);
+        auto handle =Handle<PromiseType>::from_promise(frame->pt);
+        CO_AWAIT_IMPL_IMPL(frame->initial_awaiter_.get().ref_, handle, ret);
         // If we reach here, the coroutine was not suspended (likely because of `suspend_never`, so we directly
         // run the coroutine and return the `ret` once it first suspends.
-        frame->doStep(frame);
+        handle.resume();
         return ret;
     }
 
     // Function that is called when exception is thrown inside the `doStep()/resume()` function.
-    // TODO Do we really need the `nextState` parameter, or is this just always the `currentState` member?
-    void handleException(std::exception_ptr eptr, size_t &nextState) {
+    // Returns Handle<void> for the trampoline: if the catch handler does symmetric transfer,
+    // the handle is propagated back up.
+    Handle<void> handleException(std::exception_ptr eptr, size_t &nextState) {
         // `dispatchExceptionHandling()` must be provided by the `Derived` class.
         nextState = derived().dispatchExceptionHandling(std::move(eptr));
 
-        // Exception was caught inside the class, just resume normal exection.
+        // Exception was caught inside the class, just resume normal execution.
         if (!done()) {
-            derived().doStep();
+            return Derived::doStep(static_cast<void*>(&derived()));
         }
+        return {};
     }
 
 };
