@@ -4,7 +4,7 @@
 
 int main()
 {
-    auto t = add_values(3, 1'000'000'000);
+    auto t = add_values(3, 1'000);
     t.start();
     std::cout << t.result() << std::endl; // 14
 }

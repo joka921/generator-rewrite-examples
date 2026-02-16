@@ -2,6 +2,13 @@
 #define GENERATOR_REWRITE_EXAMPLES_MACROS_H
 
 // helper macros that are used inside the `CoroImpl` and coroutine frames that inherit from `CoroImpl` (see coroutine_frame.h).
+// When called without VA_ARGS (from doStepImpl), returns Handle<void>:
+//   - Handle<void>{} (nullptr) for void/bool await_suspend (= just suspend, no symmetric transfer)
+//   - Handle<void>{nextHandle.ptr} for handle await_suspend (= symmetric transfer target)
+// When called with VA_ARGS (from ramp), returns the VA_ARGS value via comma operator.
+// The comma-operator trick `return (Handle<void>{} __VA_OPT__(, __VA_ARGS__))` yields:
+//   - `return (Handle<void>{})` when VA_ARGS is empty (returns Handle<void>)
+//   - `return (Handle<void>{}, ret)` when VA_ARGS is present (comma operator returns ret)
 #define CO_AWAIT_IMPL_IMPL(awaiterInput, handle, ...) \
 { \
   auto& awaiter = awaiterInput; \
@@ -9,20 +16,18 @@
     using type = decltype(awaiter.await_suspend(handle)); \
     if constexpr (std::is_void_v<type>) { \
     awaiter.await_suspend(handle); \
-    return __VA_ARGS__; \
+    return (Handle<void>{} __VA_OPT__(, std::move(__VA_ARGS__))); \
   } else if constexpr (std::is_same_v<type, bool>) { \
-    if (! [&](auto& awaiter) {if constexpr (std::is_same_v<type, bool>) return awaiter.await_suspend(handle); return true;}(awaiter)) { return __VA_ARGS__; } \
+    if (! [&](auto& awaiter) {if constexpr (std::is_same_v<type, bool>) return awaiter.await_suspend(handle); return true;}(awaiter)) { \
+      return (Handle<void>{} __VA_OPT__(, std::move(__VA_ARGS__))); \
+    } \
 } else { \
-/* Symmetric transfer: the generic lambda + inner if-constexpr ensures the */ \
-/* .resume() call is only instantiated when await_suspend returns a handle. */ \
-  constexpr bool doTailcall = (true __VA_OPT__(, false)); \
-  if constexpr (doTailcall) { \
+/* Symmetric transfer: await_suspend returns a handle to resume next. */ \
+/* When no VA_ARGS (inside doStepImpl), return the handle for the trampoline. */ \
+/* When VA_ARGS present (inside ramp), call .resume() on it and return the ramp result. */ \
    auto nextHandle = [&](auto& aw) { if constexpr (!std::is_void_v<type> && !std::is_same_v<type, bool>) { return aw.await_suspend(handle); } }(awaiter); \
-   [[clang::musttail]] return HandleBase::resumeTypeErased(static_cast<HandleBase*>(&nextHandle)); \
-} else { \
-   [&](auto& aw) { if constexpr (!std::is_void_v<type> && !std::is_same_v<type, bool>) { aw.await_suspend(handle).resume(); } }(awaiter); \
-  return __VA_ARGS__; \
-  } \
+   __VA_OPT__(nextHandle.resume();) \
+   return (Handle<void>{nextHandle.ptr} __VA_OPT__(, std::move(__VA_ARGS__))); \
 } \
 } \
 } void()
@@ -57,7 +62,7 @@ void()
 #define CO_RETURN_IMPL(index, finalAwaiterMem)                                  \
   self->destroySuspendedCoro(index);                                           \
   CO_RETURN_IMPL_IMPL(finalAwaiterMem);                                 \
-  return;                                                                      \
+  return {};                                                                   \
   void()
 
 #define CO_RETURN_VOID(index, finalAwaiterMem)                                  \

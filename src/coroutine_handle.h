@@ -4,14 +4,17 @@
 
 #include <cstddef>
 
+// Forward declarations needed for HandleFrame's resumeFunc return type.
+template<typename Promise> struct Handle;
+template<> struct Handle<void>;
+
 // A type-erased "base" class for a coroutine frame, consists of two function pointers to implement
 // the member functions of the `CoroutineHandle` replacement below.
-// This is exactly the layout GCC uses internally.
+// resumeFunc returns Handle<void> to support symmetric transfer trampolining:
+// a default-constructed Handle<void> (ptr=nullptr) means "no more symmetric transfers".
 struct HandleFrame {
-    using F = void(void *);
-    using B = bool(void *);
-    F *resumeFunc;
-    F *destroyFunc;
+    Handle<void>(*resumeFunc)(void *);
+    void(*destroyFunc)(void *);
 };
 
 // Common base class for `Handle<void>`  and Handle<some_promise_type>` below.
@@ -27,16 +30,12 @@ struct HandleBase {
     HandleBase& operator=(HandleBase&&) = default;
     HandleBase& operator=(std::nullptr_t) noexcept { ptr = nullptr; return *this; }
 
-    void resume() { ptr->resumeFunc(reinterpret_cast<void*>(ptr)); }
+    // Trampoline: keep resuming returned handles until we get a null handle
+    // (no more symmetric transfers). Defined out-of-line after Handle<void> is complete.
+    void resume();
     void destroy() { ptr->destroyFunc(reinterpret_cast<void*>(ptr)); }
     operator bool() const { return static_cast<bool>(ptr); }
     bool done() const { return ptr->resumeFunc == nullptr; }
-
-    static void resumeTypeErased(void* ptr)
-    {
-        auto* handle = reinterpret_cast<HandleBase*>(ptr);
-        [[clang::musttail]] return handle->ptr->resumeFunc(reinterpret_cast<void*>(handle->ptr));
-    }
 };
 
 // A replacement for `std::coroutine_handle`. Consists of a single pointer to the `HandleFrame` from above, to which it
@@ -74,11 +73,23 @@ struct Handle<void> : public HandleBase {
     using HandleBase::operator=;
 };
 
+// Now Handle<void> is complete — define the trampoline.
+inline void HandleBase::resume() {
+    Handle<void> next = ptr->resumeFunc(reinterpret_cast<void*>(ptr));
+    while (next.ptr) {
+        next = next.ptr->resumeFunc(reinterpret_cast<void*>(next.ptr));
+    }
+}
+
 // Equivalent of std::noop_coroutine() — returns a Handle<void> that does nothing on resume/destroy.
+namespace detail {
+    inline Handle<void> noop_resume(void*) { return {}; }
+    inline void noop_destroy(void*) {}
+}
 inline Handle<void> noop_coroutine() {
     static HandleFrame noop_frame{
-        [](void*) {},
-        [](void*) {}
+        &detail::noop_resume,
+        &detail::noop_destroy
     };
     return Handle<void>{&noop_frame};
 }
