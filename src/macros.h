@@ -25,13 +25,13 @@
 /* Symmetric transfer: await_suspend returns a handle to resume next. */ \
 /* When no VA_ARGS (inside doStepImpl), return the handle for the trampoline. */ \
 /* When VA_ARGS present (inside ramp), call .resume() on it and return the ramp result. */ \
-   auto nextHandle = [&](auto& aw) { if constexpr (!std::is_void_v<type> && !std::is_same_v<type, bool>) { return aw.await_suspend(handle); } }(awaiter); \
+   auto nextHandle = [&](auto& aw) { if constexpr (!std::is_void_v<type> && !std::is_same_v<type, bool>) { return aw.await_suspend(handle); } else {return Handle<void>{};} }(awaiter); \
    __VA_OPT__(nextHandle.resume();) \
    return (Handle<void>{nextHandle.ptr} __VA_OPT__(, std::move(__VA_ARGS__))); \
 } \
 } \
 } void()
-#define CO_AWAIT_IMPL(awaiterMem) CO_AWAIT_IMPL_IMPL(CO_GET(awaiterMem), CoroFrameBase::Hdl::from_promise(self->promise()))
+#define CO_AWAIT_IMPL(awaiterMem) CO_AWAIT_IMPL_IMPL(CO_GET(awaiterMem), self->getHandle())
 
 #define CO_RESUME(index, awaiterMem, ...) \
   label_##index:                                                       \
@@ -55,7 +55,7 @@
 #define CO_RETURN_IMPL_IMPL(finalAwaiterMem, ...)                                  \
 self->setDone();                                                          \
 CO_STORAGE_CONSTRUCT(self->finalAwaiterMem, (self->promise().final_suspend()));                  \
-CO_AWAIT_IMPL_IMPL(self->finalAwaiterMem.get().ref_, CoroFrameBase::Hdl::from_promise(self->promise()), __VA_ARGS__);                                              \
+CO_AWAIT_IMPL_IMPL(self->finalAwaiterMem.get().ref_, self->getHandle(), __VA_ARGS__);                                              \
 self->destroy();                      \
 void()
 

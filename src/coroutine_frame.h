@@ -33,6 +33,7 @@ struct CoroImpl {
     coro_storage<decltype(std::declval<PromiseType&>().final_suspend())&, true> final_awaiter_;
 
     using Hdl = Handle<PromiseType>;
+    Hdl getHandle(){ return Hdl::from_promise(pt);}
     PromiseType &promise() { return pt; }
 
 

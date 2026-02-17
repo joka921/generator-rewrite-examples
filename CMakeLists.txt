@@ -19,10 +19,15 @@ FetchContent_MakeAvailable(googlebenchmark)
 
 add_executable(SimpleGenerators src/simple_generators.cpp)
 add_executable(TaskExample src/task_example.cpp)
-add_executable(InlineGenerators src/inline_simple_generators.cpp)
+# add_executable(InlineGenerators src/inline_simple_generators.cpp)
 add_executable(UnifiedGeneratorsTest src/unified_generators_test.cpp)
+
+include_directories(IotaBenchmark PRIVATE ${CMAKE_SOURCE_DIR}/src)
 
 # Benchmark target
 add_executable(IotaBenchmark src/iota_benchmark.cpp)
 target_link_libraries(IotaBenchmark PRIVATE benchmark::benchmark)
-target_include_directories(IotaBenchmark PRIVATE ${CMAKE_SOURCE_DIR}/src)
+
+# Optional monad example (simplified version)
+add_executable(MaybeMonadExample src/optional_monad/maybe_example.cpp)
+target_include_directories(MaybeMonadExample PRIVATE ${CMAKE_SOURCE_DIR})

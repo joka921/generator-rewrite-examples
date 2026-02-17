@@ -33,7 +33,9 @@ struct InlineCoroImpl {
     coro_storage<decltype(std::declval<PromiseType&>().initial_suspend())&, true> initial_awaiter_;
     coro_storage<decltype(std::declval<PromiseType&>().final_suspend())&, true> final_awaiter_;
 
-    using Hdl = Handle<PromiseType>;
+    using Hdl = InlineHandle<Derived&>;
+    Hdl getHandle(){ return Hdl(derived());}
+
     PromiseType &promise() { return pt; }
 
     bool done_ = false;
@@ -88,13 +90,16 @@ struct InlineCoroImpl {
 
     // The inline coroutine `ramp` function. Returns the frame by value (NRVO, no heap allocation).
     template<typename... CoroArgs>
-    static Derived ramp(CoroArgs&&... coroArgs) {
+    static /*Derived*/ auto ramp(CoroArgs&&... coroArgs) {
         Derived frame{std::forward<CoroArgs>(coroArgs)...};
+        // TODO<joka921> Currently only working for maybe monad...
+        auto ret = frame.pt.get_return_object();
         CO_STORAGE_CONSTRUCT(frame.initial_awaiter_, (frame.pt.initial_suspend()));
         CO_AWAIT_IMPL_IMPL(frame.initial_awaiter_.get().ref_,
-                           Handle<PromiseType>::from_promise(frame.pt), frame);
+                           Handle<PromiseType>::from_promise(frame.pt), ret);
         frame.doStep();
-        return frame;
+        return ret;
+        //return frame;
     }
 
     // Function that is called when exception is thrown inside the `doStep()/resume()` function.

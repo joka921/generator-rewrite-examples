@@ -98,8 +98,13 @@ inline Handle<void> noop_coroutine() {
 template<typename CoroFrame>
 struct InlineHandle {
     CoroFrame frame;
+    static constexpr bool isReference = std::is_reference_v<CoroFrame>;
 
+    template <bool b = true, std::enable_if_t<b && !isReference, int> = 0>
     explicit InlineHandle(CoroFrame&& f) noexcept : frame(std::move(f)) {}
+
+    template <bool b = true, std::enable_if_t<b && isReference, int> = 0>
+    explicit InlineHandle(CoroFrame f) noexcept : frame(f) {}
 
     // Move constructor — invalidates the source to prevent double-destroy.
     InlineHandle(InlineHandle&& other) = default;
@@ -120,7 +125,6 @@ struct InlineHandle {
     explicit constexpr operator bool() const { return true; }
     auto& promise() { return frame.promise(); }
     const auto& promise() const { return frame.pt; }
-
 };
 
 
