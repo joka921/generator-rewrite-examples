@@ -1,9 +1,9 @@
 #ifndef GENERATOR_REWRITE_EXAMPLES_STRING_PREPEND_H
 #define GENERATOR_REWRITE_EXAMPLES_STRING_PREPEND_H
 
-#include "./coroutine_frame.h"
+#include "util/coroutine_frame.h"
 #include "./unified_generator.h"
-#include "macros.h"
+#include "util/macros.h"
 
 /**
  * The C++17 rewrite of the following generator:

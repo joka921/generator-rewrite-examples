@@ -3,8 +3,8 @@
 
 #include <optional>
 #include <exception>
-#include "./coroutine_handle.h"
-#include "./suspend.h"
+#include "util/coroutine_handle.h"
+#include "util/suspend.h"
 
 // Forward declaration of task (at global scope).
 template<typename T, template <typename...> typename TaskHandle>

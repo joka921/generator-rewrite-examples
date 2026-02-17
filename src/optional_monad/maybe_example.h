@@ -5,8 +5,8 @@
 #define OPTIONAL_MONAD_MAYBE_EXAMPLE_H
 
 #include "maybe.h"
-#include "../src/coroutine_frame.h"
-#include "../src/inline_coroutine_frame.h"
+#include "util/coroutine_frame.h"
+#include "util/inline_coroutine_frame.h"
 #include <cmath>
 #include <cassert>
 

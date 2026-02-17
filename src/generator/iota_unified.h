@@ -2,10 +2,10 @@
 #define GENERATOR_REWRITE_EXAMPLES_IOTA_UNIFIED_H
 
 #include <cassert>
-#include "./coroutine_frame.h"
-#include "./inline_coroutine_frame.h"
-#include "./unified_generator.h"
-#include "macros.h"
+#include "util/coroutine_frame.h"
+#include "util/inline_coroutine_frame.h"
+#include "generator/unified_generator.h"
+#include "util/macros.h"
 
 template <bool isStackless, typename Frame, typename promise, bool isNoexcept>
 using FrameCRTP = std::conditional_t<isStackless, CoroImpl<Frame, promise, isNoexcept>, InlineCoroImpl<Frame, promise, isNoexcept>>;

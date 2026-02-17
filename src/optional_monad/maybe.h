@@ -6,12 +6,12 @@
 #ifndef OPTIONAL_MONAD_MAYBE_H
 #define OPTIONAL_MONAD_MAYBE_H
 
-#include "../src/coroutine_frame.h"
-#include "../src/inline_coroutine_frame.h"
-#include "../src/suspend.h"
-#include "../src/coro_storage.h"
+#include "util/coroutine_frame.h"
+#include "util/inline_coroutine_frame.h"
+#include "util/suspend.h"
+#include "util/coro_storage.h"
 #include <optional>
-#include "./return_object_holder.h"
+#include "optional_monad/return_object_holder.h"
 #include <exception>
 
 // Forward declaration

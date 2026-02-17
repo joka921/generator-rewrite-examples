@@ -30,15 +30,14 @@ FetchContent_MakeAvailable(googletest)
 enable_testing()
 include(GoogleTest)
 
-add_executable(SimpleGenerators src/simple_generators.cpp)
-add_executable(TaskExample src/task_example.cpp)
-# add_executable(InlineGenerators src/inline_simple_generators.cpp)
-add_executable(UnifiedGeneratorsTest src/unified_generators_test.cpp)
+add_executable(SimpleGenerators src/generator/simple_generators.cpp)
+add_executable(TaskExample src/task/task_example.cpp)
+add_executable(UnifiedGeneratorsTest src/generator/unified_generators_test.cpp)
 
 include_directories(IotaBenchmark PRIVATE ${CMAKE_SOURCE_DIR}/src)
 
 # Benchmark target
-add_executable(IotaBenchmark src/iota_benchmark.cpp)
+add_executable(IotaBenchmark src/generator/iota_benchmark.cpp)
 target_link_libraries(IotaBenchmark PRIVATE benchmark::benchmark)
 
 # Optional monad test executable

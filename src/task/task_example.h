@@ -1,9 +1,9 @@
 #ifndef GENERATOR_REWRITE_EXAMPLES_TASK_EXAMPLE_H
 #define GENERATOR_REWRITE_EXAMPLES_TASK_EXAMPLE_H
 
-#include "./coroutine_frame.h"
-#include "./task.h"
-#include "./macros.h"
+#include "util/coroutine_frame.h"
+#include "task/task.h"
+#include "util/macros.h"
 #include <iostream>
 
 /**

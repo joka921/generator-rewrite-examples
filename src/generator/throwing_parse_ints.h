@@ -3,9 +3,9 @@
 
 #include <string>
 #include <exception>
-#include "./coroutine_frame.h"
-#include "./unified_generator.h"
-#include "macros.h"
+#include "util/coroutine_frame.h"
+#include "generator/unified_generator.h"
+#include "util/macros.h"
 
 /**
  * The C++17 rewrite of the following generator:

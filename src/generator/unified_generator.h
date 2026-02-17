@@ -6,9 +6,9 @@
 #include <iterator>
 #include <type_traits>
 #include <utility>
-#include "./suspend.h"
-#include "./coroutine_handle.h"
-#include "./coro_storage.h"
+#include "util/suspend.h"
+#include "util/coroutine_handle.h"
+#include "util/coro_storage.h"
 
 // Forward declarations
 template<typename T, typename Policy> class unified_generator;
