@@ -54,7 +54,7 @@ namespace coro_detail
             return get_awaiter(std::forward<decltype(awaitable)>(awaitable));
         } else
         {
-            return awaitable;
+            return std::forward<decltype(awaitable)>(awaitable);
         }
     }
 

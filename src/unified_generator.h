@@ -30,6 +30,8 @@ public:
     using reference_type = std::conditional_t<std::is_reference_v<T>, T, const T&>;
     using pointer_type = std::remove_reference_t<T>*;
 
+    static constexpr bool return_object_is_stackless = false;
+
     static constexpr bool store_by_value =
         std::is_trivially_copyable_v<value_type> &&
         sizeof(value_type) <= 16 &&

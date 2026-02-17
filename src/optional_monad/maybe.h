@@ -50,6 +50,7 @@ public:
 // Promise type for maybe monad
 template<typename T>
 struct maybe_promise {
+    static constexpr bool return_object_is_stackless = true;
     return_object_holder<std::optional<T>>* data_;
 public:
     maybe_promise() = default;
@@ -76,8 +77,9 @@ public:
     }
 
 
-    // Store exception for later rethrow
+    // Convert exceptions to nullopt
     void unhandled_exception() {
+        data_->emplace(std::nullopt);
     }
 };
 
