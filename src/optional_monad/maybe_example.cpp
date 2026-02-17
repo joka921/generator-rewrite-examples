@@ -52,9 +52,9 @@ std::optional<int> with_exceptions_no_coro(int x)
 std::optional<int> chained_calculation(int a, int b, int c, int reps)
 {
     using promise_type = maybe_promise<int>;
-    struct CoroFrame : InlineCoroImpl<CoroFrame, promise_type, false>
+    struct CoroFrame : stackful_coro_crtp<CoroFrame, promise_type, false>
     {
-        using CoroFrameBase = CoroImpl<CoroFrame, promise_type, false>;
+        using CoroFrameBase = stackless_coro_crtp<CoroFrame, promise_type, false>;
         const int a_;
         const int b_;
         const int c_;
@@ -77,7 +77,7 @@ std::optional<int> chained_calculation(int a, int b, int c, int reps)
         {
         }
 
-        static Handle<void> doStepImpl(void* seflPtr)
+        static stackless_coroutine_handle<void> doStepImpl(void* seflPtr)
         {
             auto* self = static_cast<CoroFrame*>(seflPtr);
             // As we never resume from a suspended state,
@@ -107,9 +107,9 @@ std::optional<int> chained_calculation(int a, int b, int c, int reps)
             assert(!h);
         }
 
-        void destroySuspendedCoro(size_t curState)
+        void destroySuspendedCoro(size_t suspendIdx_)
         {
-            switch (curState)
+            switch (suspendIdx_)
             {
             case 0:
                 this->initial_awaiter_.destroy();
@@ -142,19 +142,19 @@ std::optional<int> chained_calculation(int a, int b, int c, int reps)
 std::optional<int> with_exceptions(int x)
 {
     using promise_type = maybe_promise<int>;
-    struct CoroFrame : CoroImpl<CoroFrame, promise_type, false>
+    struct CoroFrame : stackless_coro_crtp<CoroFrame, promise_type, false>
     {
-        using CoroFrameBase = CoroImpl<CoroFrame, promise_type, false>;
+        using CoroFrameBase = stackless_coro_crtp<CoroFrame, promise_type, false>;
         int x_;
 
         CoroFrame(int x) : x_(x)
         {
         }
 
-        static Handle<void> doStepImpl(void* selfPtr)
+        static stackless_coroutine_handle<void> doStepImpl(void* selfPtr)
         {
             auto* self = static_cast<CoroFrame*>(selfPtr);
-            switch (self->curState)
+            switch (self->suspendIdx_)
             {
             case 0: break;
             }
@@ -174,9 +174,9 @@ std::optional<int> with_exceptions(int x)
         }
 
 
-        void destroySuspendedCoro(size_t curState)
+        void destroySuspendedCoro(size_t suspendIdx_)
         {
-            switch (curState)
+            switch (suspendIdx_)
             {
             case 0:
                 this->initial_awaiter_.destroy();

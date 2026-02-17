@@ -34,8 +34,8 @@ public:
     }
 
     // Never called since await_ready() always returns true
-    template<typename Handle>
-    void await_suspend(Handle h) noexcept
+    template<typename stackless_coroutine_handle>
+    void await_suspend(stackless_coroutine_handle h) noexcept
     {
         h.promise().data_->emplace(std::nullopt);
         h.destroy();

@@ -24,7 +24,7 @@ auto inline_iota_unified(int start, int end)
 
         void doStepImpl() noexcept
         {
-            switch (this->curState)
+            switch (this->suspendIdx_)
             {
             case 0: break;
             case 1: goto label_1;
@@ -40,9 +40,9 @@ auto inline_iota_unified(int start, int end)
             CO_RETURN_VOID(2, final_awaiter_);
         }
 
-        void destroySuspendedCoro(size_t curState)
+        void destroySuspendedCoro(size_t suspendIdx_)
         {
-            switch (curState)
+            switch (suspendIdx_)
             {
             case 0:
                 this->initial_awaiter_.destroy();

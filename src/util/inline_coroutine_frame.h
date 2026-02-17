@@ -7,26 +7,16 @@
 #include "./coro_storage.h"
 #include "./macros.h"
 
-// A CRTP base class for inline (stackful) coroutine frames. Nearly identical to `CoroImpl`,
+// A CRTP base class for inline (stackful) coroutine frames. Nearly identical to `stackless_coro_crtp`,
 // but `ramp()` returns the frame by value (no heap allocation) and `destroy()` does not
 // deallocate the frame.
 template <typename Derived, typename PromiseType, bool isNoexcept>
-struct InlineCoroImpl
+struct stackful_coro_crtp
 {
-    // Required by the `Handle` class: the `promise` has to be declared directly after the `HandleFrame`.
-    PromiseType pt;
-
-    static void CHECK()
-    {
-        /*
-        static_assert(offsetof(InlineCoroImpl, pt) -
-                      offsetof(InlineCoroImpl, frm) ==
-                      Handle<PromiseType>::promise_offset);
-                      */
-    }
+    PromiseType promise_;
 
     // index of the current suspension point.
-    size_t curState = 0;
+    size_t suspendIdx_ = 0;
 
     // Needed for exception handling when walking up the stack.
     static constexpr size_t CO_NO_TRY_BLOCK = static_cast<size_t>(-1);
@@ -37,10 +27,10 @@ struct InlineCoroImpl
     initial_awaiter_;
     [[no_unique_address]] coro_storage<decltype(std::declval<PromiseType&>().final_suspend())&, true> final_awaiter_;
 
-    using Hdl = InlineHandle<Derived&>;
-    Hdl getHandle() { return Hdl(derived()); }
+    using handle_type = stackful_coroutine_handle<Derived&>;
+    handle_type getHandle() { return handle_type(derived()); }
 
-    PromiseType& promise() { return pt; }
+    PromiseType& promise() { return promise_; }
 
     bool done_ = false;
 
@@ -55,24 +45,19 @@ struct InlineCoroImpl
     }
 
 
-    // Type erased `destroy` function. Unlike `CoroImpl::destroy`, does NOT deallocate the frame.
+    // Type erased `destroy` function. Unlike `stackless_coro_crtp::destroy`, does NOT deallocate the frame or call its
+    // destructor, this is done automatically once the frame goes out of scope.
     void destroy()
     {
         if (!done())
         {
-            derived().destroySuspendedCoro(curState);
+            derived().destroySuspendedCoro(suspendIdx_);
         }
         else
         {
             final_awaiter_.get().ref_.await_resume();
             final_awaiter_.destroy();
         }
-    }
-
-    // Constructor, set up the function pointers at the beginning of the frame.
-    InlineCoroImpl()
-    {
-        CHECK();
     }
 
     Derived& derived() { return *static_cast<Derived*>(this); }
@@ -89,13 +74,17 @@ struct InlineCoroImpl
             {
                 derived().doStepImpl();
             }
-            catch (...) { handleException(std::current_exception(), curState); }
+            catch (...) { handleException(std::current_exception(), suspendIdx_); }
         }
     }
 
-    // The inline coroutine `ramp` function. Returns the frame by value (NRVO, no heap allocation).
+    // The inline coroutine `ramp` function. The return type depends on the promise:
+    // if `PromiseType::return_object_is_stackless` is true (meaning that the return object doesn't depend on the
+    // coroutine frame because the frame has run to completion before the return object is returned (used for fully
+    // eager coroutines like the ` optional`  coroutine.) Otherwise, the `Derived` object (the actual coroutine frame/ state machine)
+    // is returned directly, and it is the response of the caller to construct the actual return object (e.g. a stackful generator) from it.
     template <typename... CoroArgs>
-    static /*Derived*/ auto ramp(CoroArgs&&... coroArgs)
+    static auto ramp(CoroArgs&&... coroArgs)
     {
         Derived frame{std::forward<CoroArgs>(coroArgs)...};
 
@@ -105,11 +94,11 @@ struct InlineCoroImpl
 
         auto ret = [&]()
         {
-            if constexpr (resIsStackless) { return frame.pt.get_return_object(); }
+            if constexpr (resIsStackless) { return frame.promise_.get_return_object(); }
             else { return 0; }
         }();
 
-        CO_STORAGE_CONSTRUCT(frame.initial_awaiter_, (frame.pt.initial_suspend()));
+        CO_STORAGE_CONSTRUCT(frame.initial_awaiter_, (frame.promise_.initial_suspend()));
         if constexpr (resIsStackless)
         {
             CO_AWAIT_IMPL_IMPL(frame.initial_awaiter_.get().ref_,

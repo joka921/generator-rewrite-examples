@@ -21,11 +21,12 @@ struct coro_storage {
 
     // Proxy type to obtain a reference to the stored value. The correct way to obtain a reference on a `coro_storage c` is to call
     // `c.get().ref_`. The proxy type gives us the correct behavior for `rvalue` references, because without the proxy object,
-    // they would behave like being wrapped in `std::move`.
+    // when using an accessor function, they would behave like being wrapped in `std::move`.
     struct Proxy {
         Ref ref_;
     };
-    Proxy get() {
+
+    Proxy get() noexcept {
         Storage &storage = *std::launder(reinterpret_cast<Storage *>(buffer));
         if constexpr (isOwning) {
             return Proxy{static_cast<Ref>(storage)};
@@ -37,7 +38,7 @@ struct coro_storage {
     // Destroy the stored object.
     // Note: We deliberately don't provide a `construct` method, but the using code should
     // use `placement new` directly on the buffer to not break copy elision.
-    void destroy() {
+    void destroy() noexcept(std::is_nothrow_destructible_v<Storage>) {
         std::launder(reinterpret_cast<Storage *>(buffer))->~Storage();
     }
 };
@@ -49,7 +50,7 @@ namespace detail {
 }
 
 // Engage the buffer of a `coro_storage` object. The variadic args in all cases have to be
-// either an expression in parenthesis, or in braces. If the `storage` doesn't own the object,
+// either an expression in parens, or in braces. If the `storage` doesn't own the object,
 // then a single parenthesized lvalue-reference is expected, of which the address is stored in
 // the buffer.
 // Examples:
@@ -61,11 +62,10 @@ namespace detail {
   using M = std::decay_t<decltype(storageArg)>; \
   if constexpr (M::isOwning) { \
     new(storageArg.buffer) typename M::Storage __VA_ARGS__; \
-    ASAN_UNPOISON_MEMORY_REGION(storageArg.buffer, sizeof(typename M::Storage)); \
    } else { \
      new(storageArg.buffer) typename M::Storage{ detail::dependent_addressof<M>(__VA_ARGS__)} ;\
-    ASAN_UNPOISON_MEMORY_REGION(storageArg.buffer, sizeof(typename M::Storage)); \
   } \
+  ASAN_UNPOISON_MEMORY_REGION(storageArg.buffer, sizeof(typename M::Storage)); \
 }(storage)
 
 

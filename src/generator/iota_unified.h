@@ -8,11 +8,11 @@
 #include "util/macros.h"
 
 template <bool isStackless, typename Frame, typename promise, bool isNoexcept>
-using FrameCRTP = std::conditional_t<isStackless, CoroImpl<Frame, promise, isNoexcept>, InlineCoroImpl<Frame, promise, isNoexcept>>;
+using FrameCRTP = std::conditional_t<isStackless, stackless_coro_crtp<Frame, promise, isNoexcept>, stackful_coro_crtp<Frame, promise, isNoexcept>>;
 /**
  * A simple `iota` generator using the unified heap_generator alias.
  * Direct replacement of:
- *   generator<int, Handle> iota(int start, int end) { ... }
+ *   generator<int, stackless_coroutine_handle> iota(int start, int end) { ... }
  */
 template <bool stackless = true>
 auto iota_unified(int start, int end)
@@ -28,10 +28,10 @@ auto iota_unified(int start, int end)
         {
         }
 
-        static Handle<void> doStepImpl(void* selfPtr)
+        static stackless_coroutine_handle<void> doStepImpl(void* selfPtr)
         {
             auto* self = static_cast<CoroFrame*>(selfPtr);
-            switch (self->curState)
+            switch (self->suspendIdx_)
             {
             case 0: break;
             case 1: goto label_1;
@@ -54,9 +54,9 @@ auto iota_unified(int start, int end)
             assert(!handle);
         }
 
-        void destroySuspendedCoro(size_t curState)
+        void destroySuspendedCoro(size_t suspendIdx_)
         {
-            switch (curState)
+            switch (suspendIdx_)
             {
             case 0:
                 this->initial_awaiter_.destroy();
@@ -74,7 +74,7 @@ auto iota_unified(int start, int end)
     } else
     {
         return inline_gen<int, CoroFrame>{
-            InlineHandle<CoroFrame>{CoroFrame::ramp(start, end)}};
+            stackful_coroutine_handle<CoroFrame>{CoroFrame::ramp(start, end)}};
     }
 }
 #endif //GENERATOR_REWRITE_EXAMPLES_IOTA_UNIFIED_H

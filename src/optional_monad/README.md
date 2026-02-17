@@ -10,7 +10,7 @@ This directory contains an implementation of the optional monad pattern, adapted
 
 ## Implementation Note
 
-The original plan was to integrate with this repository's manual C++17 coroutine lowering system (using `CoroImpl`/`InlineCoroImpl` and the `CO_AWAIT`/`CO_RETURN` macros). However, this encountered compilation issues related to how the macros handle awaiter types and template instantiation.
+The original plan was to integrate with this repository's manual C++17 coroutine lowering system (using `stackless_coro_crtp`/`InlineCoroImpl` and the `CO_AWAIT`/`CO_RETURN` macros). However, this encountered compilation issues related to how the macros handle awaiter types and template instantiation.
 
 Instead, this is a **simplified implementation** that demonstrates the optional monad concept using:
 - Standard C++ `std::optional<T>`
@@ -76,7 +76,7 @@ auto result = chained_calculation(10, 0, 16);
 The manual C++17 coroutine lowering system in this repository uses complex macros (`CO_AWAIT`, `CO_RETURN_VALUE`, etc.) that expand to state machines with handle types and symmetric transfer logic. When attempting to integrate the optional monad as an awaitable type, we encountered:
 
 1. **Macro instantiation issues** - The `CO_AWAIT_IMPL_IMPL` macro has a lambda with conditional returns based on `if constexpr`, which causes "variable has incomplete type 'void'" errors with certain compiler versions
-2. **Template deduction complexity** - The awaiter's `await_suspend` needs to work with both `Handle<Promise>` and inline frames, creating template instantiation conflicts
+2. **Template deduction complexity** - The awaiter's `await_suspend` needs to work with both `stackless_coroutine_handle<Promise>` and inline frames, creating template instantiation conflicts
 3. **Short-circuit mechanism** - Implementing short-circuiting requires accessing frame state (`setDone()`) which isn't exposed through the handle interface
 
 While these issues could potentially be resolved with significant macro refactoring, the simplified approach better demonstrates the optional monad *concept* without getting bogged down in the intricacies of manual coroutine lowering.

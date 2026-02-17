@@ -18,9 +18,9 @@ template <typename RangeOfStrings>
 heap_generator<std::string> string_prepend(RangeOfStrings&& rangeOfStrings, std::string prefix)
 {
     using promise_type = heap_generator<std::string>::promise_type;
-    struct CoroFrame : CoroImpl<CoroFrame, promise_type, true>
+    struct CoroFrame : stackless_coro_crtp<CoroFrame, promise_type, true>
     {
-        using CoroFrameBase = CoroImpl<CoroFrame, promise_type, true>;
+        using CoroFrameBase = stackless_coro_crtp<CoroFrame, promise_type, true>;
         RangeOfStrings&& rangeOfStrings_;
         std::string prefix_;
 
@@ -36,10 +36,10 @@ heap_generator<std::string> string_prepend(RangeOfStrings&& rangeOfStrings, std:
         {
         }
 
-        static Handle<void> doStepImpl(void* selfPtr)
+        static stackless_coroutine_handle<void> doStepImpl(void* selfPtr)
         {
             auto* self = static_cast<CoroFrame*>(selfPtr);
-            switch (self->curState)
+            switch (self->suspendIdx_)
             {
             case 0: break;
             case 1: goto label_1;
@@ -58,9 +58,9 @@ heap_generator<std::string> string_prepend(RangeOfStrings&& rangeOfStrings, std:
             CO_RETURN_VOID(2, final_awaiter_);
         }
 
-        void destroySuspendedCoro(size_t curState)
+        void destroySuspendedCoro(size_t suspendIdx_)
         {
-            switch (curState)
+            switch (suspendIdx_)
             {
             case 0:
                 this->initial_awaiter_.destroy();

@@ -16,7 +16,6 @@
  *         co_yield std::stoi(s);
  *       } catch (...) {
  *         if (!catch_errors) throw;  // escape to caller
- *         co_yield -1;              // fallback
  *       }
  *     }
  *   }
@@ -28,9 +27,9 @@ template <typename RangeOfStrings>
 heap_generator<int> throwing_parse_ints(RangeOfStrings&& strings, bool catch_errors)
 {
     using promise_type = heap_generator<int>::promise_type;
-    struct CoroFrame : CoroImpl<CoroFrame, promise_type, false>
+    struct CoroFrame : stackless_coro_crtp<CoroFrame, promise_type, false>
     {
-        using CoroFrameBase = CoroImpl<CoroFrame, promise_type, false>;
+        using CoroFrameBase = stackless_coro_crtp<CoroFrame, promise_type, false>;
         RangeOfStrings&& strings_;
         bool catch_errors_;
 
@@ -38,9 +37,8 @@ heap_generator<int> throwing_parse_ints(RangeOfStrings&& strings, bool catch_err
         using End = decltype(std::end(strings_));
         coro_storage<It&, std::is_object_v<It>> it_;
         coro_storage<const End&, std::is_object_v<End>> end_;
-        coro_storage<int&&, true> parsed_;
-        coro_storage<int&&, true> fallback_;
-        std::exception_ptr caught_exception_;
+        coro_storage<int&, true> parsed_;
+
 
         CoroFrame(RangeOfStrings&& s, bool ce)
             : strings_(std::forward<RangeOfStrings>(s)), catch_errors_(ce)
@@ -53,15 +51,16 @@ heap_generator<int> throwing_parse_ints(RangeOfStrings&& strings, bool catch_err
         //   2  = co_yield inside catch (the -1 fallback)
         //   3  = co_return
         //   10 = catch handler entry
-        static Handle<void> doStepImpl(void* selfPtr)
+        static stackless_coroutine_handle<void> doStepImpl(void* selfPtr)
         {
             auto* self = static_cast<CoroFrame*>(selfPtr);
-            switch (self->curState)
+            switch (self->suspendIdx_)
             {
             case 0: break;
             case 1: goto label_1;
-            case 2: goto label_2;
             case 10: goto label_catch_0;
+            case 11: goto label_catch_1;
+            case 12: goto label_try_end_0;
             }
 
             CO_GET(initial_awaiter_).await_resume();
@@ -71,64 +70,99 @@ heap_generator<int> throwing_parse_ints(RangeOfStrings&& strings, bool catch_err
             for (; CO_GET(it_) != CO_GET(end_); ++CO_GET(it_))
             {
                 // try {
+                CO_INIT(parsed_, (-1));
                 TRY_BEGIN(0);
-                CO_INIT(parsed_, (std::stoi(*CO_GET(it_))));
-                CO_YIELD(1, initial_awaiter_, CO_GET(parsed_));
-                self->parsed_.destroy();
-                TRY_END(CoroFrameBase::CO_NO_TRY_BLOCK, try_end_0);
-                continue;
+                CO_GET(parsed_) = std::stoi(*CO_GET(it_));
+                goto label_try_end_0;
                 // } catch (...) {
                 label_catch_0:
-                if (!self->catch_errors_) {
-                    std::rethrow_exception(self->caught_exception_);
-                }
-                CO_INIT(fallback_, (-1));
-                CO_YIELD(2, initial_awaiter_, CO_GET(fallback_));
-                self->fallback_.destroy();
+                    {
+                        if (!self->catch_errors_)
+                        {
+                            throw;
+                        }
+                        self->suspendIdx_ = 12;
+                        return {};
+                    }
+                label_catch_1:
+                    {
+                        if (!self->catch_errors_)
+                        {
+                            throw;
+                        }
+                        CO_GET(parsed_) = -2;
+                        self->suspendIdx_ = 12;
+                        return {};
+                    }
+
+                // End of catch clause. We deliberately `return`, because we
+                // have to end the scope of the exception stack.
+                TRY_END(CoroFrameBase::CO_NO_TRY_BLOCK, try_end_0);
+                std::cout << " parsedll" << CO_GET(parsed_) << std::endl;
+                CO_YIELD(1, initial_awaiter_, CO_GET(parsed_));
                 // }
             }
+            self->parsed_.destroy();
             CO_RETURN_VOID(3, final_awaiter_);
         }
 
-        size_t dispatchExceptionHandling(std::exception_ptr eptr)
+        stackless_coroutine_handle<void> dispatchExceptionHandling()
         {
             switch (this->currentTryBlock_)
             {
             case CoroFrameBase::CO_NO_TRY_BLOCK:
                 // Unhandled exception: store in promise, clean up locals, enter final suspend.
-                this->promise().unhandled_exception();
                 it_.destroy();
                 end_.destroy();
                 this->setDone();
-                CO_STORAGE_CONSTRUCT(this->final_awaiter_, (this->promise().final_suspend()));
-                return CoroFrameBase::CO_NO_TRY_BLOCK;
+                this->promise().unhandled_exception();
+                {
+                    auto* self = this;
+                CO_RETURN_IMPL_IMPL(final_awaiter_);
+                }
             case 0:
-                // Exception caught by try block 0: store eptr, redirect to catch handler.
-                caught_exception_ = std::move(eptr);
-                this->curState = 10;
-                this->currentTryBlock_ = CoroFrameBase::CO_NO_TRY_BLOCK;
-                return 10;
+                handleCatchClause_0();
             default:
                 __builtin_unreachable();
             }
         }
 
-        void destroySuspendedCoro(size_t curState)
+        stackless_coroutine_handle<void> handleCatchClause_0()
         {
-            switch (curState)
+            this->currentTryBlock_ = CoroFrameBase::CO_NO_TRY_BLOCK;
+            try {
+            try
+            {
+               throw;
+            } catch (const std::invalid_argument&)
+            {
+                this->suspendIdx_ = 10;
+            } catch (const std::out_of_range&)
+            {
+                this->suspendIdx_ = 11;
+            }
+                auto handled = this->doStepImpl(this);
+                return this->doStepImpl(this);
+            } catch (...)
+            {
+                return dispatchExceptionHandling();
+            }
+        }
+
+        void destroySuspendedCoro(size_t suspendIdx_)
+        {
+            switch (suspendIdx_)
             {
             case 0:
                 this->initial_awaiter_.destroy();
                 return;
             case 1:
                 this->initial_awaiter_.destroy();
-                parsed_.destroy();
                 it_.destroy();
                 end_.destroy();
                 return;
             case 2:
                 this->initial_awaiter_.destroy();
-                fallback_.destroy();
                 it_.destroy();
                 end_.destroy();
                 return;

@@ -27,7 +27,7 @@ int main()
         std::cout << "throwing_parse_ints (catch_errors=true): ";
         for (auto val : throwing_parse_ints(input, true))
         {
-            std::cout << val << ", ";
+            std::cout << val << ", " << std::endl;
         }
         std::cout << std::endl;
     }

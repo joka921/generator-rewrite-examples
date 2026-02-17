@@ -46,7 +46,7 @@ public:
 
     unified_generator_promise() = default;
 
-    // get_return_object: used by heap CoroImpl::ramp(), not called in inline path.
+    // get_return_object: used by heap stackless_coro_crtp::ramp(), not called in inline path.
     unified_generator<T, HeapGeneratorPolicy<T>> get_return_object() noexcept;
 
     constexpr SuspendAlways initial_suspend() const noexcept { return {}; }
@@ -168,7 +168,7 @@ private:
 template<typename T>
 struct HeapGeneratorPolicy {
     using promise_type = detail::unified_generator_promise<T>;
-    using handle_type = Handle<promise_type>;
+    using handle_type = stackless_coroutine_handle<promise_type>;
     static constexpr bool nullable = true;
 };
 
@@ -176,7 +176,7 @@ struct HeapGeneratorPolicy {
 template<typename T, typename CoroFrame>
 struct InlineGeneratorPolicy {
     using promise_type = detail::unified_generator_promise<T>;
-    using handle_type = InlineHandle<CoroFrame>;
+    using handle_type = stackful_coroutine_handle<CoroFrame>;
     static constexpr bool nullable = false;
 };
 
@@ -266,7 +266,7 @@ namespace detail {
     template<typename T>
     unified_generator<T, HeapGeneratorPolicy<T>>
     unified_generator_promise<T>::get_return_object() noexcept {
-        using handle_t = Handle<unified_generator_promise<T>>;
+        using handle_t = stackless_coroutine_handle<unified_generator_promise<T>>;
         return unified_generator<T, HeapGeneratorPolicy<T>>{
             handle_t::from_promise(*this)};
     }

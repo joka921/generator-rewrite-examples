@@ -18,12 +18,12 @@
  * @param end
  * @return
  */
-generator<int, Handle> iota(int start, int end)
+generator<int, stackless_coroutine_handle> iota(int start, int end)
 {
-    using promise_type = generator<int, Handle>::promise_type;
-    struct CoroFrame : CoroImpl<CoroFrame, promise_type, true>
+    using promise_type = generator<int, stackless_coroutine_handle>::promise_type;
+    struct CoroFrame : stackless_coro_crtp<CoroFrame, promise_type, true>
     {
-        using CoroFrameBase = CoroImpl<CoroFrame, promise_type, true>;
+        using CoroFrameBase = stackless_coro_crtp<CoroFrame, promise_type, true>;
         int start_;
         int end_;
 
@@ -33,7 +33,7 @@ generator<int, Handle> iota(int start, int end)
 
         void doStepImpl()
         {
-            switch (this->curState)
+            switch (this->suspendIdx_)
             {
             case 0: break;
             case 1: goto label_1;
@@ -49,9 +49,9 @@ generator<int, Handle> iota(int start, int end)
             CO_RETURN_VOID(2, final_awaiter_);
         }
 
-        void destroySuspendedCoro(size_t curState)
+        void destroySuspendedCoro(size_t suspendIdx_)
         {
-            switch (curState)
+            switch (suspendIdx_)
             {
             case 0:
                 this->initial_awaiter_.destroy();

@@ -8,22 +8,22 @@
 
 /**
  * Manually lowered equivalent of:
- *   task<size_t, Handle> compute_value(size_t x) { co_return x * 2; }
+ *   task<size_t, stackless_coroutine_handle> compute_value(size_t x) { co_return x * 2; }
  */
-inline task<size_t, Handle> compute_value(size_t x)
+inline task<size_t, stackless_coroutine_handle> compute_value(size_t x)
 {
-    using promise_type = task<size_t, Handle>::promise_type;
-    struct CoroFrame : CoroImpl<CoroFrame, promise_type, true>
+    using promise_type = task<size_t, stackless_coroutine_handle>::promise_type;
+    struct CoroFrame : stackless_coro_crtp<CoroFrame, promise_type, true>
     {
-        using CoroFrameBase = CoroImpl<CoroFrame, promise_type, true>;
+        using CoroFrameBase = stackless_coro_crtp<CoroFrame, promise_type, true>;
         size_t x_;
 
         CoroFrame(size_t x) : x_(x) {}
 
-        static Handle<void> doStepImpl(void* selfPtr)
+        static stackless_coroutine_handle<void> doStepImpl(void* selfPtr)
         {
             auto* self = static_cast<CoroFrame*>(selfPtr);
-            switch (self->curState)
+            switch (self->suspendIdx_)
             {
             case 0: break;
             }
@@ -35,9 +35,9 @@ inline task<size_t, Handle> compute_value(size_t x)
             CO_RETURN_VALUE(1, final_awaiter_, (self->x_ * 2));
         }
 
-        void destroySuspendedCoro(size_t curState)
+        void destroySuspendedCoro(size_t suspendIdx_)
         {
-            switch (curState)
+            switch (suspendIdx_)
             {
             case 0:
                 this->initial_awaiter_.destroy();
@@ -52,18 +52,18 @@ inline task<size_t, Handle> compute_value(size_t x)
 
 /**
  * Manually lowered equivalent of:
- *   task<size_t, Handle> add_values(size_t a, size_t b) {
+ *   task<size_t, stackless_coroutine_handle> add_values(size_t a, size_t b) {
  *       size_t va = co_await compute_value(a);
  *       size_t vb = co_await compute_value(b);
  *       co_return va + vb;
  *   }
  */
-inline task<size_t, Handle> add_values(size_t a, size_t b)
+inline task<size_t, stackless_coroutine_handle> add_values(size_t a, size_t b)
 {
-    using promise_type = task<size_t, Handle>::promise_type;
-    struct CoroFrame : CoroImpl<CoroFrame, promise_type, false>
+    using promise_type = task<size_t, stackless_coroutine_handle>::promise_type;
+    struct CoroFrame : stackless_coro_crtp<CoroFrame, promise_type, false>
     {
-        using CoroFrameBase = CoroImpl<CoroFrame, promise_type, true>;
+        using CoroFrameBase = stackless_coro_crtp<CoroFrame, promise_type, true>;
         size_t a_;
         size_t b_;
         size_t res_;
@@ -71,8 +71,8 @@ inline task<size_t, Handle> add_values(size_t a, size_t b)
         size_t vb_;
 
         // Storage for the inner task and its awaiter.
-        coro_storage<task<size_t, Handle>&, true> task_storage_;
-        coro_storage<detail::task_awaiter<size_t, Handle>&, true> awaiter_storage_;
+        coro_storage<task<size_t, stackless_coroutine_handle>&, true> task_storage_;
+        coro_storage<detail::task_awaiter<size_t, stackless_coroutine_handle>&, true> awaiter_storage_;
 
         CoroFrame(size_t a, size_t b) : a_(a), b_(b) {}
 
@@ -82,10 +82,10 @@ inline task<size_t, Handle> add_values(size_t a, size_t b)
             std::terminate();
         }
 
-        static Handle<void> doStepImpl(void* selfPtr)
+        static stackless_coroutine_handle<void> doStepImpl(void* selfPtr)
         {
             auto* self = static_cast<CoroFrame*>(selfPtr);
-            switch (self->curState)
+            switch (self->suspendIdx_)
             {
             case 0: break;
             case 1: goto label_1;
@@ -116,9 +116,9 @@ inline task<size_t, Handle> add_values(size_t a, size_t b)
             CO_RETURN_VALUE(3, final_awaiter_, (self->res_));
         }
 
-        void destroySuspendedCoro(size_t curState)
+        void destroySuspendedCoro(size_t suspendIdx_)
         {
-            switch (curState)
+            switch (suspendIdx_)
             {
             case 0:
                 this->initial_awaiter_.destroy();

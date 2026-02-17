@@ -3,7 +3,7 @@
 
 #include "./suspend.h"
 
- // A simple generator class. It is templated on the used `Handle` type, so we can either use it with `std::coroutine_handle`, or with our own.
+ // A simple generator class. It is templated on the used `stackless_coroutine_handle` type, so we can either use it with `std::coroutine_handle`, or with our own.
     template<typename T,
         template <typename...> typename GeneratorHandle
         >

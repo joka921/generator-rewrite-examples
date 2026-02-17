@@ -12,8 +12,6 @@ namespace coro_detail
 
     // `has_await_transform<Promise>::value` is true iff. `Promise` has a member function `await_transform` that can be called
     // with a single argument.
-    // NOTE: This actually is just a proxy, in reality we would have to check for ANY member function called `await_transform`,
-    // But that is hard to do without reflection, so we leave this proxy for now.
     template<typename Promise, typename = void>
     struct has_await_transform : std::false_type {
     };
@@ -25,6 +23,8 @@ namespace coro_detail
             : std::true_type {
     };
 
+    // Type traits that checks whether a function `get_awaiter(awaitable)` can be found via ADL.
+    // This is our proxy for `operator co_await` which is not available in C++17.
     template<typename Awaitable, typename = void>
     struct has_get_awaiter : std::false_type {
     };
@@ -35,12 +35,9 @@ namespace coro_detail
             : std::true_type {
     };
 
-    // Given a `promise` and a `co_await`ed expression, get the actual `awaitable`, possibly through the `await_transform` mechanism.
-    // NOTE: We currently deliberately ignore the possibility of `operator co_await` being present. This might be fixed
-    // Until C++Now.
+    // Given a `promise` and a `co_await`ed expression, get the actual `awaiter`, possibly through the `await_transform` and `get_awaiter` mechanisms.
     template<typename Promise, typename Expr>
     decltype(auto) get_awaiter(Promise &promise, Expr &&expr) {
-        // TODO what about co_await <something that is void>)
         decltype(auto) awaitable = [&]() ->decltype(auto)
         {
             if constexpr (has_await_transform<Promise>::value) {

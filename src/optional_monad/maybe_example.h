@@ -30,8 +30,8 @@ inline std::optional<int> safe_sqrt(int x) {
 // Demonstrates short-circuiting when any operation returns nullopt
 inline std::optional<int> chained_calculation_header(int a, int b, int c) {
     using promise_type = maybe_promise<int>;
-    struct CoroFrame : InlineCoroImpl<CoroFrame, promise_type, false> {
-        using CoroFrameBase = CoroImpl<CoroFrame, promise_type, false>;
+    struct CoroFrame : stackful_coro_crtp<CoroFrame, promise_type, false> {
+        using CoroFrameBase = stackless_coro_crtp<CoroFrame, promise_type, false>;
         const int a_;
         const int b_;
         const int c_;
@@ -48,7 +48,7 @@ inline std::optional<int> chained_calculation_header(int a, int b, int c) {
 
         // The original generic doStepImpl
         /*
-        static Handle<void> doStepImpl(void* seflPtr) {
+        static stackless_coroutine_handle<void> doStepImpl(void* seflPtr) {
             auto* self = static_cast<CoroFrame*>(seflPtr);
             // As we never resume from a suspended state,
             // we can completely get rid of the switch-goto block.
@@ -67,7 +67,7 @@ inline std::optional<int> chained_calculation_header(int a, int b, int c) {
             CO_RETURN_VALUE(3, final_awaiter_, result1_ + result2_);
         }
         */
-       __attribute__((no_stack_protector)) static Handle<void> doStepImpl(void* seflPtr) {
+       __attribute__((no_stack_protector)) static stackless_coroutine_handle<void> doStepImpl(void* seflPtr) {
             auto* self = static_cast<CoroFrame*>(seflPtr);
             // As we never resume from a suspended state,
             // we can completely get rid of the switch-goto block.
@@ -104,8 +104,8 @@ inline std::optional<int> chained_calculation_header(int a, int b, int c) {
             assert(!h);
         }
 
-        void destroySuspendedCoro(size_t curState) {
-            switch (curState) {
+        void destroySuspendedCoro(size_t suspendIdx_) {
+            switch (suspendIdx_) {
             case 0:
                 this->initial_awaiter_.destroy();
                 return;
