@@ -21,13 +21,13 @@ int main()
         std::cout << s << std::endl;
     }
 
-    // throwing_parse_ints with catch_errors=true: invalid strings yield -1
+    // throwing_parse_ints with catch_errors=true: invalid strings yield -1, out of range yield -2.
     {
-        std::array<std::string, 5> input = {"42", "hello", "7", "", "100"};
+        std::array<std::string, 5> input = {"42", "hello", "7", "9999999999999999999", "100"};
         std::cout << "throwing_parse_ints (catch_errors=true): ";
         for (auto val : throwing_parse_ints(input, true))
         {
-            std::cout << val << ", " << std::endl;
+            std::cout << val << ", ";
         }
         std::cout << std::endl;
     }

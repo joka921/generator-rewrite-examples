@@ -98,7 +98,6 @@ heap_generator<int> throwing_parse_ints(RangeOfStrings&& strings, bool catch_err
                 // End of catch clause. We deliberately `return`, because we
                 // have to end the scope of the exception stack.
                 TRY_END(CoroFrameBase::CO_NO_TRY_BLOCK, try_end_0);
-                std::cout << " parsedll" << CO_GET(parsed_) << std::endl;
                 CO_YIELD(1, initial_awaiter_, CO_GET(parsed_));
                 // }
             }
@@ -121,7 +120,7 @@ heap_generator<int> throwing_parse_ints(RangeOfStrings&& strings, bool catch_err
                 CO_RETURN_IMPL_IMPL(final_awaiter_);
                 }
             case 0:
-                handleCatchClause_0();
+                return handleCatchClause_0();
             default:
                 __builtin_unreachable();
             }
