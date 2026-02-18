@@ -64,30 +64,24 @@ std::optional<int> chained_calculation(int a, int b, int c, int reps) {
 
     CoroFrame(int a, int b, int c, int reps) : a_(a), b_(b), c_(c), reps_(reps) {}
 
-    static stackless_coroutine_handle<void> doStepImpl(void* seflPtr) {
-      auto* self = static_cast<CoroFrame*>(seflPtr);
+    stackless_coroutine_handle<void> doStepImpl() {
       // As we never resume from a suspended state,
       // we can completely get rid of the switch-goto block.
 
       // Resume initial suspend
       CO_GET(initial_awaiter_).await_resume();
-      self->initial_awaiter_.destroy();
+      this->initial_awaiter_.destroy();
 
-      self->result_ = 0;
-      for (size_t i = 0; i < self->reps_; ++i) {
-        CO_AWAIT(1, awaiter_storage_, safe_divide(self->a_, self->b_), self->result1_ =);
+      this->result_ = 0;
+      for (size_t i = 0; i < this->reps_; ++i) {
+        CO_AWAIT(1, awaiter_storage_, safe_divide(this->a_, this->b_), this->result1_ =);
 
         // int r2 = co_await safe_sqrt(c_);
-        CO_AWAIT(2, awaiter_storage_, safe_sqrt(self->c_), self->result2_ =);
-        self->result_ += self->result1_ + self->result2_;
+        CO_AWAIT(2, awaiter_storage_, safe_sqrt(this->c_), this->result2_ =);
+        this->result_ += this->result1_ + this->result2_;
       }
       // co_return r1 + r2;
-      CO_RETURN_VALUE(3, final_awaiter_, self->result_);
-    }
-
-    void doStep() {
-      [[maybe_unused]] auto h = doStepImpl(this);
-      assert(!h);
+      CO_RETURN_VALUE(3, final_awaiter_, this->result_);
     }
 
     void destroySuspendedCoro(size_t suspendIdx_) {
@@ -124,24 +118,23 @@ std::optional<int> with_exceptions(int x) {
 
     CoroFrame(int x) : x_(x) {}
 
-    static stackless_coroutine_handle<void> doStepImpl(void* selfPtr) {
-      auto* self = static_cast<CoroFrame*>(selfPtr);
-      switch (self->suspendIdx_) {
+    stackless_coroutine_handle<void> doStepImpl() {
+      switch (this->suspendIdx_) {
         case 0:
           break;
       }
 
       // Resume initial suspend
       CO_GET(initial_awaiter_).await_resume();
-      self->initial_awaiter_.destroy();
+      this->initial_awaiter_.destroy();
 
       // Throw an exception if x is negative
-      if (self->x_ < 0) {
+      if (this->x_ < 0) {
         throw std::invalid_argument("Input must be non-negative");
       }
 
       // Otherwise return x * 2
-      CO_RETURN_VALUE(1, final_awaiter_, self->x_ * 2);
+      CO_RETURN_VALUE(1, final_awaiter_, this->x_ * 2);
     }
 
     void destroySuspendedCoro(size_t suspendIdx_) {
@@ -154,15 +147,9 @@ std::optional<int> with_exceptions(int x) {
       }
     }
 
-    size_t dispatchExceptionHandling(std::exception_ptr eptr) {
-      try {
-        std::rethrow_exception(eptr);
-      } catch (...) {
-        // Other exceptions: store for later rethrow
-        promise().unhandled_exception();
-      }
-      setDone();
-      return 1;
+    stackless_coroutine_handle<void> dispatchExceptionHandling() {
+      // await_final_suspend() calls unhandled_exception() and handles final suspend.
+      return this->await_final_suspend();
     }
   };
 

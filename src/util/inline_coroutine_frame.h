@@ -1,6 +1,7 @@
 #ifndef GENERATOR_REWRITE_EXAMPLES_INLINE_COROUTINE_FRAME_H
 #define GENERATOR_REWRITE_EXAMPLES_INLINE_COROUTINE_FRAME_H
 
+#include <cassert>
 #include <stdexcept>
 
 #include "./coro_storage.h"
@@ -54,10 +55,12 @@ struct stackful_coro_crtp {
 
   void doStep() noexcept(isNoexcept) {
     if constexpr (isNoexcept) {
-      derived().doStepImpl();
+      [[maybe_unused]] auto h = derived().doStepImpl();
+      assert(!h);
     } else {
       try {
-        derived().doStepImpl();
+        [[maybe_unused]] auto h = derived().doStepImpl();
+        assert(!h);
       } catch (...) {
         handleException(std::current_exception(), suspendIdx_);
       }

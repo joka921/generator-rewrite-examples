@@ -19,18 +19,17 @@ inline task<size_t, stackless_coroutine_handle> compute_value(size_t x) {
 
     CoroFrame(size_t x) : x_(x) {}
 
-    static stackless_coroutine_handle<void> doStepImpl(void* selfPtr) {
-      auto* self = static_cast<CoroFrame*>(selfPtr);
-      switch (self->suspendIdx_) {
+    stackless_coroutine_handle<void> doStepImpl() {
+      switch (this->suspendIdx_) {
         case 0:
           break;
       }
 
       CO_GET(initial_awaiter_).await_resume();
-      self->initial_awaiter_.destroy();
+      this->initial_awaiter_.destroy();
 
       // co_return x_ * 2;
-      CO_RETURN_VALUE(1, final_awaiter_, (self->x_ * 2));
+      CO_RETURN_VALUE(1, final_awaiter_, (this->x_ * 2));
     }
 
     void destroySuspendedCoro(size_t suspendIdx_) {
@@ -70,14 +69,13 @@ inline task<size_t, stackless_coroutine_handle> add_values(size_t a, size_t b) {
 
     CoroFrame(size_t a, size_t b) : a_(a), b_(b) {}
 
-    size_t dispatchExceptionHandling(std::exception_ptr eptr) {
+    stackless_coroutine_handle<void> dispatchExceptionHandling() {
       // not implemented for now, just checking for the symmetric transfer.
       std::terminate();
     }
 
-    static stackless_coroutine_handle<void> doStepImpl(void* selfPtr) {
-      auto* self = static_cast<CoroFrame*>(selfPtr);
-      switch (self->suspendIdx_) {
+    stackless_coroutine_handle<void> doStepImpl() {
+      switch (this->suspendIdx_) {
         case 0:
           break;
         case 1:
@@ -87,25 +85,25 @@ inline task<size_t, stackless_coroutine_handle> add_values(size_t a, size_t b) {
       }
 
       CO_GET(initial_awaiter_).await_resume();
-      self->initial_awaiter_.destroy();
+      this->initial_awaiter_.destroy();
 
-      self->res_ = 0;
-      while (self->a_ < self->b_) {
+      this->res_ = 0;
+      while (this->a_ < this->b_) {
         // size_t va = co_await compute_value(a_);
-        CO_INIT(task_storage_, (compute_value(self->a_)));
-        CO_AWAIT(1, awaiter_storage_, CO_GET(task_storage_), self->va_ =);
-        self->task_storage_.destroy();
+        CO_INIT(task_storage_, (compute_value(this->a_)));
+        CO_AWAIT(1, awaiter_storage_, CO_GET(task_storage_), this->va_ =);
+        this->task_storage_.destroy();
 
-        CO_INIT(task_storage_, (compute_value(self->b_)));
-        CO_AWAIT(2, awaiter_storage_, CO_GET(task_storage_), self->vb_ =);
-        self->task_storage_.destroy();
-        self->res_ += self->va_ + self->vb_;
-        ++self->a_;
-        --self->b_;
+        CO_INIT(task_storage_, (compute_value(this->b_)));
+        CO_AWAIT(2, awaiter_storage_, CO_GET(task_storage_), this->vb_ =);
+        this->task_storage_.destroy();
+        this->res_ += this->va_ + this->vb_;
+        ++this->a_;
+        --this->b_;
       }
 
       // co_return va_ + vb_;
-      CO_RETURN_VALUE(3, final_awaiter_, (self->res_));
+      CO_RETURN_VALUE(3, final_awaiter_, (this->res_));
     }
 
     void destroySuspendedCoro(size_t suspendIdx_) {

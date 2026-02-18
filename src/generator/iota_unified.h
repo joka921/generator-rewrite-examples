@@ -27,9 +27,8 @@ auto iota_unified(int start, int end) {
 
     CoroFrame(int s, int e) : start_(s), end_(e) {}
 
-    static stackless_coroutine_handle<void> doStepImpl(void* selfPtr) {
-      auto* self = static_cast<CoroFrame*>(selfPtr);
-      switch (self->suspendIdx_) {
+    stackless_coroutine_handle<void> doStepImpl() {
+      switch (this->suspendIdx_) {
         case 0:
           break;
         case 1:
@@ -37,18 +36,12 @@ auto iota_unified(int start, int end) {
       }
 
       CO_GET(initial_awaiter_).await_resume();
-      self->initial_awaiter_.destroy();
-      while (self->start_ < self->end_) {
-        CO_YIELD(1, initial_awaiter_, (self->start_));
-        ++self->start_;
+      this->initial_awaiter_.destroy();
+      while (this->start_ < this->end_) {
+        CO_YIELD(1, initial_awaiter_, (this->start_));
+        ++this->start_;
       }
       CO_RETURN_VOID(2, final_awaiter_);
-    }
-
-    // Non-static overload for InlineCoroImpl (inline/stack-allocated path).
-    void doStepImpl() {
-      [[maybe_unused]] auto handle = doStepImpl(static_cast<void*>(this));
-      assert(!handle);
     }
 
     void destroySuspendedCoro(size_t suspendIdx_) {

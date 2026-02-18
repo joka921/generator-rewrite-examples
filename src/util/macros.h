@@ -48,7 +48,7 @@
     }                                                                                              \
   }                                                                                                \
   void()
-#define CO_AWAIT_IMPL(awaiterMem) CO_AWAIT_IMPL_IMPL(CO_GET(awaiterMem), self->getHandle())
+#define CO_AWAIT_IMPL(awaiterMem) CO_AWAIT_IMPL_IMPL(CO_GET(awaiterMem), this->getHandle())
 
 // The second half of a `co_await`. Create a label that corresponds to the `index` ,
 // call `await_resume()`  on the awaiter, and destroy it. The variadic args
@@ -56,21 +56,21 @@
 // (then ` auto x =`  will be the variadic args.
 #define CO_RESUME(index, awaiterMem, ...)                        \
   label_##index : __VA_ARGS__ CO_GET(awaiterMem).await_resume(); \
-  self->awaiterMem.destroy();
+  this->awaiterMem.destroy();
 
 // Co yield the given expression/value creating a suspension point with the given index.
 // the variadic args are used to possibly do something with the result of the `co_yield` expression.
 #define CO_YIELD(index, awaiterMem, value, ...)              \
-  CO_INIT(awaiterMem, (self->promise().yield_value(value))); \
-  self->suspendIdx_ = index;                                 \
+  CO_INIT(awaiterMem, (this->promise().yield_value(value))); \
+  this->suspendIdx_ = index;                                 \
   CO_AWAIT_IMPL(awaiterMem);                                 \
   CO_RESUME(index, awaiterMem, __VA_ARGS__);                 \
   void()
 
 // Same as `CO_YIELD`, but for `co_await` expressions.
 #define CO_AWAIT(index, awaiterMem, expr, ...)                            \
-  CO_INIT(awaiterMem, (coro_detail::get_awaiter(self->promise(), expr))); \
-  self->suspendIdx_ = index;                                              \
+  CO_INIT(awaiterMem, (coro_detail::get_awaiter(this->promise(), expr))); \
+  this->suspendIdx_ = index;                                              \
   CO_AWAIT_IMPL(awaiterMem);                                              \
   CO_RESUME(index, awaiterMem, __VA_ARGS__);                              \
   void()
@@ -79,16 +79,16 @@
 // `await`  on the `finalAwaiter`, and if that doesn't suspend,
 // then immediately destroy the frame.
 #define CO_RETURN_IMPL_IMPL(finalAwaiterMem, ...)                                       \
-  self->setDone();                                                                      \
-  CO_STORAGE_CONSTRUCT(self->finalAwaiterMem, (self->promise().final_suspend()));       \
-  CO_AWAIT_IMPL_IMPL(self->finalAwaiterMem.get().ref_, self->getHandle(), __VA_ARGS__); \
-  self->destroy();                                                                      \
+  this->setDone();                                                                      \
+  CO_STORAGE_CONSTRUCT(this->finalAwaiterMem, (this->promise().final_suspend()));       \
+  CO_AWAIT_IMPL_IMPL(this->finalAwaiterMem.get().ref_, this->getHandle(), __VA_ARGS__); \
+  this->destroy();                                                                      \
   void()
 
 // Destroy all the local variables that are still active at the given index
 // of the co_return statement, and then co_await the final suspend.
 #define CO_RETURN_IMPL(index, finalAwaiterMem) \
-  self->destroySuspendedCoro(index);           \
+  this->destroySuspendedCoro(index);           \
   CO_RETURN_IMPL_IMPL(finalAwaiterMem);        \
   return {};                                   \
   void()
@@ -96,8 +96,8 @@
 // Implement `co_return <void>`. Creates a suspension point (to which we will never resume,
 // but which is used to properly destroy the data members of the frame.
 #define CO_RETURN_VOID(index, finalAwaiterMem)                                                  \
-  if constexpr (coro_detail::has_return_void<std::decay_t<decltype(self->promise())>>::value) { \
-    self->promise().return_void();                                                              \
+  if constexpr (coro_detail::has_return_void<std::decay_t<decltype(this->promise())>>::value) { \
+    this->promise().return_void();                                                              \
   }                                                                                             \
   CO_RETURN_IMPL(index, finalAwaiterMem);                                                       \
   void()
@@ -105,35 +105,35 @@
 // Implement `co_return <non-void-expr>`. Creates a suspension point (to which we will never resume,
 // but which is used to properly destroy the data members of the frame.
 #define CO_RETURN_VALUE(index, finalAwaiterMem, value) \
-  self->promise().return_value(value);                 \
+  this->promise().return_value(value);                 \
   CO_RETURN_IMPL(index, finalAwaiterMem);              \
   void()
 
 // TODO document those helper macros for the exception handling.
 #define DESTROY_UNCONDITIONALLY(mem) \
-  self->mem.destroy();               \
-  self->__constructed.mem = false;   \
+  this->mem.destroy();               \
+  this->__constructed.mem = false;   \
   void()
 #define DESTROY_IF_CONSTRUCTED(mem) \
-  if (self->__constructed.mem) {    \
+  if (this->__constructed.mem) {    \
     DESTROY_UNCONDITIONALLY(mem);   \
   }                                 \
   void()
 
 #define TRY_BEGIN(try_index)            \
-  self->currentTryBlock_ = (try_index); \
+  this->currentTryBlock_ = (try_index); \
   void()
 #define TRY_END(parent_index, label)       \
-  self->currentTryBlock_ = (parent_index); \
+  this->currentTryBlock_ = (parent_index); \
   label_##label : void()
 
 #define FOR_LOOP_HEADER(N)
 
-#define CO_GET(arg) self->arg.get().ref_
+#define CO_GET(arg) this->arg.get().ref_
 
-#define CO_INIT(mem, ...) CO_STORAGE_CONSTRUCT(self->mem, __VA_ARGS__);
+#define CO_INIT(mem, ...) CO_STORAGE_CONSTRUCT(this->mem, __VA_ARGS__);
 
 // Same as co
-#define CO_INIT_EX(mem, ...) CO_INIT(mem, __VA_ARGS__); self->__constructed.mem = true;
+#define CO_INIT_EX(mem, ...) CO_INIT(mem, __VA_ARGS__); this->__constructed.mem = true;
 
 #endif  // GENERATOR_REWRITE_EXAMPLES_MACROS_H

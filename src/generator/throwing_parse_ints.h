@@ -66,10 +66,9 @@ heap_generator<int> throwing_parse_ints(RangeOfStrings&& strings, bool catch_err
         //   2  = co_yield inside catch (the -1 fallback)
         //   3  = co_return
         //   10 = catch handler entry
-        static stackless_coroutine_handle<void> doStepImpl(void* selfPtr)
+        stackless_coroutine_handle<void> doStepImpl()
         {
-            auto* self = static_cast<CoroFrame*>(selfPtr);
-            switch (self->suspendIdx_)
+            switch (this->suspendIdx_)
             {
             // initial suspension point;
             case 0:
@@ -91,19 +90,19 @@ heap_generator<int> throwing_parse_ints(RangeOfStrings&& strings, bool catch_err
             DESTROY_UNCONDITIONALLY(initial_awaiter_);
 
             // Manually (roughly) rewrite range-for-loop.
-            CO_INIT_EX(it_, (self->strings_.begin()));
-            CO_INIT_EX(end_, (self->strings_.end()));
+            CO_INIT_EX(it_, (this->strings_.begin()));
+            CO_INIT_EX(end_, (this->strings_.end()));
             for (; CO_GET(it_) != CO_GET(end_); ++CO_GET(it_))
             {
                 // try {
-                self->currentTryBlock_ = 0;
+                this->currentTryBlock_ = 0;
                 CO_INIT_EX(parsed_, (std::stoi(*CO_GET(it_))));
                 CO_YIELD(1, initial_awaiter_, CO_GET(parsed_));
                 DESTROY_UNCONDITIONALLY(parsed_);
                 // } catch { (the catch handling is defined below,
                 // but we are no longer inside try-block 0, but in its parent, which is no try-block at all.
                 // if we pass this line, then we can just pop from the try-block stack.
-                self->currentTryBlock_ = CoroFrameBase::CO_NO_TRY_BLOCK;
+                this->currentTryBlock_ = CoroFrameBase::CO_NO_TRY_BLOCK;
             try_end:
                 // }
             for_continue:
@@ -127,7 +126,6 @@ heap_generator<int> throwing_parse_ints(RangeOfStrings&& strings, bool catch_err
                     // but we don't have any further information. We thus have to possibly destroy all
                     // members except for `parsed_` (which is defined inside the try-block, and
                     // therefore in all cases already has been destroyed.
-                    auto* self = this;
                     DESTROY_IF_CONSTRUCTED(end_);
                     DESTROY_IF_CONSTRUCTED(it_);
                     DESTROY_IF_CONSTRUCTED(initial_awaiter_);
@@ -147,7 +145,6 @@ heap_generator<int> throwing_parse_ints(RangeOfStrings&& strings, bool catch_err
             this->currentTryBlock_ = CoroFrameBase::CO_NO_TRY_BLOCK;
             try
             {
-                auto* self = this;
                 DESTROY_IF_CONSTRUCTED(parsed_);
                 // If none of the catch clauses contains a `break/continue/co_return`, then
                 // we resume after the try-catch block.

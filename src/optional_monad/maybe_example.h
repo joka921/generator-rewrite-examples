@@ -69,39 +69,33 @@ inline std::optional<int> chained_calculation_header(int a, int b, int c) {
     */
     __attribute__((no_stack_protector))
 
-    static stackless_coroutine_handle<void>
-    doStepImpl(void* seflPtr) {
-      auto* self = static_cast<CoroFrame*>(seflPtr);
+    stackless_coroutine_handle<void>
+    doStepImpl() {
       // As we never resume from a suspended state,
       // we can completely get rid of the switch-goto block.
 
       // Resume initial suspend
       CO_GET(initial_awaiter_).await_resume();
-      self->initial_awaiter_.destroy();
+      this->initial_awaiter_.destroy();
 
       // int r1 = co_await safe_divide(a_, b_);
-      maybe_awaiter<int> awaiter{safe_divide(self->a_, self->b_)};
+      maybe_awaiter<int> awaiter{safe_divide(this->a_, this->b_)};
       if (!awaiter.await_ready()) {
-        awaiter.await_suspend(self->getHandle());
+        awaiter.await_suspend(this->getHandle());
       }
       int result1 = awaiter.await_resume();
-      // CO_AWAIT(1, awaiter_storage_, safe_divide(self->a_, self->b_), int result1_=);
+      // CO_AWAIT(1, awaiter_storage_, safe_divide(this->a_, this->b_), int result1_=);
 
       // int r2 = co_await safe_sqrt(c_);
-      // CO_AWAIT(2, awaiter_storage_, safe_sqrt(self->c_), int result2_=);
-      maybe_awaiter<int> awaiter2{safe_sqrt(self->c_)};
+      // CO_AWAIT(2, awaiter_storage_, safe_sqrt(this->c_), int result2_=);
+      maybe_awaiter<int> awaiter2{safe_sqrt(this->c_)};
       if (!awaiter2.await_ready()) {
-        awaiter2.await_suspend(self->getHandle());
+        awaiter2.await_suspend(this->getHandle());
       }
       int result2 = awaiter2.await_resume();
 
       // co_return r1 + r2;
       CO_RETURN_VALUE(3, final_awaiter_, result1 + result2);
-    }
-
-    void doStep() {
-      [[maybe_unused]] auto h = doStepImpl(this);
-      assert(!h);
     }
 
     void destroySuspendedCoro(size_t suspendIdx_) {

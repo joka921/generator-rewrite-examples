@@ -32,9 +32,8 @@ heap_generator<std::string> string_prepend(RangeOfStrings&& rangeOfStrings, std:
     CoroFrame(RangeOfStrings&& ros, std::string pref)
         : rangeOfStrings_(std::forward<RangeOfStrings>(ros)), prefix_(std::move(pref)) {}
 
-    static stackless_coroutine_handle<void> doStepImpl(void* selfPtr) {
-      auto* self = static_cast<CoroFrame*>(selfPtr);
-      switch (self->suspendIdx_) {
+    stackless_coroutine_handle<void> doStepImpl() {
+      switch (this->suspendIdx_) {
         case 0:
           break;
         case 1:
@@ -42,13 +41,13 @@ heap_generator<std::string> string_prepend(RangeOfStrings&& rangeOfStrings, std:
       }
 
       CO_GET(initial_awaiter_).await_resume();
-      self->initial_awaiter_.destroy();
-      CO_INIT(it_, (self->rangeOfStrings_.begin()));
-      CO_INIT(end_, (self->rangeOfStrings_.end()));
+      this->initial_awaiter_.destroy();
+      CO_INIT(it_, (this->rangeOfStrings_.begin()));
+      CO_INIT(end_, (this->rangeOfStrings_.end()));
       for (; CO_GET(it_) != CO_GET(end_); ++CO_GET(it_)) {
-        CO_INIT(tmp_, (self->prefix_ + *CO_GET(it_)));
+        CO_INIT(tmp_, (this->prefix_ + *CO_GET(it_)));
         CO_YIELD(1, initial_awaiter_, CO_GET(tmp_));
-        self->tmp_.destroy();
+        this->tmp_.destroy();
       }
       CO_RETURN_VOID(2, final_awaiter_);
     }

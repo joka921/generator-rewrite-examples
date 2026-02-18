@@ -1,6 +1,7 @@
 #ifndef GENERATOR_REWRITE_EXAMPLES_COROUTINE_FRAME_H
 #define GENERATOR_REWRITE_EXAMPLES_COROUTINE_FRAME_H
 
+#include <cassert>
 #include <stdexcept>
 
 #include "./coro_storage.h"
@@ -56,7 +57,10 @@ struct stackless_coro_crtp {
 
   // Type erased `resume` function, needed for the indirect type-erased call through the `handle`.
   // Returns stackless_coroutine_handle<void> for the trampoline in HandleBase::resume().
-  static stackless_coroutine_handle<void> resume(void* blubb) { return doStep(fromHandle(blubb)); }
+  static stackless_coroutine_handle<void> resume(void* blubb) {
+    auto* d = fromHandle(blubb);
+    return d->doStep();
+  }
 
   // Type erased `destroy` function.
   static void destroy(void* blubb) {
@@ -64,18 +68,19 @@ struct stackless_coro_crtp {
     self->destroy();
   }
 
-    stackless_coroutine_handle<void> await_final_suspend()
+  stackless_coroutine_handle<void> await_final_suspend()
   {
       this->setDone();
       this->promise().unhandled_exception();
-      auto* self = this;
       CO_RETURN_IMPL_IMPL(final_awaiter_);
 
-      deleteFrame();
+      // If the final awaiter doesn't suspend, CO_RETURN_IMPL_IMPL already
+      // called this->destroy() which calls deleteFrame(). This path is only
+      // reached in that case (UB territory), but we need the return for syntax.
       return {};
   }
 
-    void deleteFrame()
+  void deleteFrame()
   {
       // Destroy and delete the `Derived` object itself (it was allocated on the heap via the `ramp()`
       // below.
@@ -91,16 +96,15 @@ struct stackless_coro_crtp {
   }
   // Actual implementation of `destroy` function.
   void destroy() {
-    auto* self = &derived();
     // If the coroutine is currently suspended at a suspension point that is not the final
     // suspension point, we first have to destroy the local variables inside the coroutine frame.
-    if (!self->done()) {
-      self->destroySuspendedCoro(self->suspendIdx_);
+    if (!derived().done()) {
+      derived().destroySuspendedCoro(derived().suspendIdx_);
     } else {
       // The coroutine is suspended at its final suspension point, local variables already have been
       // destroyed, but the final_awaiter_ still exists.
-      self->final_awaiter_.get().ref_.await_resume();
-      self->final_awaiter_.destroy();
+      derived().final_awaiter_.get().ref_.await_resume();
+      derived().final_awaiter_.destroy();
     }
       deleteFrame();
   }
@@ -114,25 +118,25 @@ struct stackless_coro_crtp {
 
   Derived& derived() { return *static_cast<Derived*>(this); }
 
-  // The type-erased actor function. calls into `Derived::doStepImpl`.
-  static stackless_coroutine_handle<void> doStep(void* ptrToDerived) noexcept(isNoexcept) {
+  // The actor function. Calls into `derived().doStepImpl()`.
+  stackless_coroutine_handle<void> doStep() noexcept(isNoexcept) {
     if constexpr (isNoexcept) {
-      return Derived::doStepImpl(ptrToDerived);
+      return derived().doStepImpl();
     } else {
       stackless_coroutine_handle<void> ret;
-      auto& derived = *static_cast<Derived*>(ptrToDerived);
+      auto& d = derived();
       try {
-        return Derived::doStepImpl(ptrToDerived);
+        return d.doStepImpl();
       } catch (...) {
-        ret = derived.handleException();
+        ret = d.handleException();
       }
         // As the `handleException` function only catches exceptions and then returns, we have to do
         // another step, as nobody has actually suspended the coroutine. We don't do another step if
         // the frame is `done` which can happen either for uncaught exceptions, or for exp
-        if (!derived.done())
+        if (!d.done())
         {
             assert(!ret);
-            doStep(ptrToDerived);
+            d.doStep();
         }
         return ret;
     }
