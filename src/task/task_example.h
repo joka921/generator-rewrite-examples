@@ -69,7 +69,7 @@ inline task<size_t, stackless_coroutine_handle> add_values(size_t a, size_t b) {
 
     CoroFrame(size_t a, size_t b) : a_(a), b_(b) {}
 
-    stackless_coroutine_handle<void> dispatchExceptionHandling() {
+    ExceptionResult dispatchExceptionHandling() {
       // not implemented for now, just checking for the symmetric transfer.
       std::terminate();
     }

@@ -147,9 +147,9 @@ std::optional<int> with_exceptions(int x) {
       }
     }
 
-    stackless_coroutine_handle<void> dispatchExceptionHandling() {
-      // await_final_suspend() calls unhandled_exception() and handles final suspend.
-      return this->await_final_suspend();
+    ExceptionResult dispatchExceptionHandling() {
+      // unhandled_exception() calls unhandled_exception() and handles final suspend.
+      return this->unhandled_exception();
     }
   };
 

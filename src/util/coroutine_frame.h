@@ -9,6 +9,16 @@
 #include "./macros.h"
 #include "./type_traits.h"
 
+// Return type for exception handling in the stackless coroutine path.
+// Carries both the handle for symmetric transfer and a flag indicating whether
+// the frame has already been destroyed (e.g. because the final awaiter didn't
+// suspend). When `frame_destroyed` is true, the caller must not access the
+// coroutine frame anymore.
+struct ExceptionResult {
+  stackless_coroutine_handle<void> handle{};
+  bool frame_destroyed = false;
+};
+
 // A CRTP base class for coroutine frame + state machine. Contains all members and functions that
 // only depend on the `PromiseType` of a coroutine type.
 template <typename Derived, typename PromiseType, bool isNoexcept>
@@ -68,16 +78,39 @@ struct stackless_coro_crtp {
     self->destroy();
   }
 
-  stackless_coroutine_handle<void> await_final_suspend()
+  // Called from dispatchExceptionHandling() when an exception is unhandled.
+  // Stores the exception via promise().unhandled_exception(), sets done, constructs and
+  // awaits the final awaiter. If the final awaiter suspends, the frame stays
+  // alive (frame_destroyed=false). If it doesn't suspend, the frame is cleaned
+  // up and deleted (frame_destroyed=true).
+  ExceptionResult unhandled_exception()
   {
       this->setDone();
       this->promise().unhandled_exception();
-      CO_RETURN_IMPL_IMPL(final_awaiter_);
-
-      // If the final awaiter doesn't suspend, CO_RETURN_IMPL_IMPL already
-      // called this->destroy() which calls deleteFrame(). This path is only
-      // reached in that case (UB territory), but we need the return for syntax.
-      return {};
+      CO_STORAGE_CONSTRUCT(this->final_awaiter_, (this->promise().final_suspend()));
+      auto& awaiter = this->final_awaiter_.get().ref_;
+      if (!awaiter.await_ready()) {
+        using type = decltype(awaiter.await_suspend(this->getHandle()));
+        if constexpr (std::is_void_v<type>) {
+          awaiter.await_suspend(this->getHandle());
+          return {{}, false};
+        } else if constexpr (std::is_same_v<type, bool>) {
+          if (awaiter.await_suspend(this->getHandle())) {
+            return {{}, false};
+          }
+          // await_suspend returned false: didn't actually suspend, fall through.
+        } else {
+          auto next = awaiter.await_suspend(this->getHandle());
+          return {stackless_coroutine_handle<void>{next.ptr}, false};
+        }
+      }
+      // Final awaiter didn't suspend. Clean up and delete the frame.
+      awaiter.await_resume();
+      this->final_awaiter_.destroy();
+      deleteFrame();
+      // After deleteFrame(), `this` is freed. We must not access any members.
+      // The return value is constructed on the caller's stack, so this is safe.
+      return {{}, true};
   }
 
   void deleteFrame()
@@ -123,22 +156,27 @@ struct stackless_coro_crtp {
     if constexpr (isNoexcept) {
       return derived().doStepImpl();
     } else {
-      stackless_coroutine_handle<void> ret;
       auto& d = derived();
       try {
         return d.doStepImpl();
       } catch (...) {
-        ret = d.handleException();
-      }
+        auto [handle, frame_destroyed] = d.handleException();
+        // If the frame was already destroyed (e.g. final awaiter was
+        // suspend_never), we must not touch `d` anymore.
+        if (frame_destroyed) {
+          return handle;
+        }
         // As the `handleException` function only catches exceptions and then returns, we have to do
         // another step, as nobody has actually suspended the coroutine. We don't do another step if
-        // the frame is `done` which can happen either for uncaught exceptions, or for exp
+        // the frame is `done` which can happen either for uncaught exceptions, or for exceptions
+        // that were caught at the final try-block level.
         if (!d.done())
         {
-            assert(!ret);
-            d.doStep();
+            assert(!handle);
+            return d.doStep();
         }
-        return ret;
+        return handle;
+      }
     }
   }
 
@@ -164,9 +202,8 @@ struct stackless_coro_crtp {
   }
 
   // Function that is called when exception is thrown inside the `doStep()/resume()` function.
-  // Returns stackless_coroutine_handle<void> for the trampoline: if the catch handler does
-  // symmetric transfer via `co_return`, the handle is propagated back up.
-  stackless_coroutine_handle<void> handleException() {
+  // Returns ExceptionResult: the handle for symmetric transfer and whether the frame was destroyed.
+  ExceptionResult handleException() {
     // `dispatchExceptionHandling()` must be provided by the `Derived` class.
     return derived().dispatchExceptionHandling();
   }

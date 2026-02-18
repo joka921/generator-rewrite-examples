@@ -116,7 +116,7 @@ heap_generator<int> throwing_parse_ints(RangeOfStrings&& strings, bool catch_err
 
         // This function is expected by the CRTP base class. It is called from inside a generic catch(...)
         // clause, so we have access to the current exception.
-        stackless_coroutine_handle<void> dispatchExceptionHandling()
+        ExceptionResult dispatchExceptionHandling()
         {
             switch (this->currentTryBlock_)
             {
@@ -129,7 +129,7 @@ heap_generator<int> throwing_parse_ints(RangeOfStrings&& strings, bool catch_err
                     DESTROY_IF_CONSTRUCTED(end_);
                     DESTROY_IF_CONSTRUCTED(it_);
                     DESTROY_IF_CONSTRUCTED(initial_awaiter_);
-                    return this->await_final_suspend();
+                    return this->unhandled_exception();
                 }
             case 0:
                 return handleCatchClause_0();
@@ -139,7 +139,7 @@ heap_generator<int> throwing_parse_ints(RangeOfStrings&& strings, bool catch_err
         }
 
         // Implementation for the catch clauses of the first (and only) try-catch block.
-        stackless_coroutine_handle<void> handleCatchClause_0()
+        ExceptionResult handleCatchClause_0()
         {
             // No more parent try-catch block from here on.
             this->currentTryBlock_ = CoroFrameBase::CO_NO_TRY_BLOCK;
