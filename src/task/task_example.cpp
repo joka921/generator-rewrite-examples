@@ -1,10 +1,9 @@
-#include <iostream>
-
 #include "./task_example.h"
 
-int main()
-{
-    auto t = add_values(3, 180'000'000);
-    t.start();
-    std::cout << t.result() << std::endl; // 14
+#include <iostream>
+
+int main() {
+  auto t = add_values(3, 180'000'000);
+  t.start();
+  std::cout << t.result() << std::endl;  // 14
 }

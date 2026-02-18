@@ -1,10 +1,11 @@
 #ifndef GENERATOR_REWRITE_EXAMPLES_THROWING_PARSE_INTS_H
 #define GENERATOR_REWRITE_EXAMPLES_THROWING_PARSE_INTS_H
 
-#include <string>
 #include <exception>
-#include "util/coroutine_frame.h"
+#include <string>
+
 #include "generator/unified_generator.h"
+#include "util/coroutine_frame.h"
 #include "util/macros.h"
 
 /**
@@ -24,153 +25,150 @@
  * try-catch inside a generator with exception dispatch.
  */
 template <typename RangeOfStrings>
-heap_generator<int> throwing_parse_ints(RangeOfStrings&& strings, bool catch_errors)
-{
-    using promise_type = heap_generator<int>::promise_type;
-    struct CoroFrame : stackless_coro_crtp<CoroFrame, promise_type, false>
+heap_generator<int> throwing_parse_ints(RangeOfStrings&& strings, bool catch_errors) {
+  using promise_type = heap_generator<int>::promise_type;
+  struct CoroFrame : stackless_coro_crtp<CoroFrame, promise_type, false> {
+    using CoroFrameBase = stackless_coro_crtp<CoroFrame, promise_type, false>;
+    RangeOfStrings&& strings_;
+    bool catch_errors_;
+
+    using It = decltype(std::begin(strings_));
+    using End = decltype(std::end(strings_));
+    coro_storage<It&, std::is_object_v<It>> it_;
+    coro_storage<const End&, std::is_object_v<End>> end_;
+    coro_storage<int&, true> parsed_;
+
+      struct
+      {
+          bool initial_awaiter_ = true;
+          bool it_;
+          bool end_;
+          bool parsed_;
+      } __constructed;
+
+    CoroFrame(RangeOfStrings&& s, bool ce)
+        : strings_(std::forward<RangeOfStrings>(s)), catch_errors_(ce) {}
+
+    // States:
+    //   0  = initial_suspend
+    //   1  = co_yield inside try (after stoi)
+    //   2  = co_yield inside catch (the -1 fallback)
+    //   3  = co_return
+    //   10 = catch handler entry
+    static stackless_coroutine_handle<void> doStepImpl(void* selfPtr) {
+      auto* self = static_cast<CoroFrame*>(selfPtr);
+      switch (self->suspendIdx_) {
+      case 0:
+          break;
+      case 1:
+          goto label_1;
+      case 12:
+          goto try_end;
+      // The end of the loop body, and the position after the loop body each get a label. That way we can
+          // implement `continue` and `break` inside the catch handlers, which are defined out of line.
+      case 20:
+          goto for_continue;
+      case 21:
+          goto for_break;
+      }
+
+      CO_GET(initial_awaiter_).await_resume();
+      DESTROY_UNCONDITIONALLY(initial_awaiter_);
+
+      CO_INIT_EX(it_, (self->strings_.begin()));
+      CO_INIT_EX(end_, (self->strings_.end()));
+      for (; CO_GET(it_) != CO_GET(end_); ++CO_GET(it_))
+      {
+          // try {
+          self->currentTryBlock_ = 0;
+          CO_INIT_EX(parsed_, (std::stoi(*CO_GET(it_))));
+          CO_YIELD(1, initial_awaiter_, CO_GET(parsed_));
+          DESTROY_UNCONDITIONALLY(parsed_);
+          // } catch { (the catch handling is out of line.
+          // if we pass this line, then we can just pop from the try-block stack.
+          self->currentTryBlock_ = CoroFrameBase::CO_NO_TRY_BLOCK;
+      try_end:
+        // }
+    for_continue:
+          ;
+      }
+  for_break:
+        DESTROY_UNCONDITIONALLY(end_);
+        DESTROY_UNCONDITIONALLY(it_);
+      CO_RETURN_VOID(2, final_awaiter_);
+    }
+
+    stackless_coroutine_handle<void> dispatchExceptionHandling()
     {
-        using CoroFrameBase = stackless_coro_crtp<CoroFrame, promise_type, false>;
-        RangeOfStrings&& strings_;
-        bool catch_errors_;
-
-        using It = decltype(std::begin(strings_));
-        using End = decltype(std::end(strings_));
-        coro_storage<It&, std::is_object_v<It>> it_;
-        coro_storage<const End&, std::is_object_v<End>> end_;
-        coro_storage<int&, true> parsed_;
-
-
-        CoroFrame(RangeOfStrings&& s, bool ce)
-            : strings_(std::forward<RangeOfStrings>(s)), catch_errors_(ce)
+        switch (this->currentTryBlock_)
         {
-        }
-
-        // States:
-        //   0  = initial_suspend
-        //   1  = co_yield inside try (after stoi)
-        //   2  = co_yield inside catch (the -1 fallback)
-        //   3  = co_return
-        //   10 = catch handler entry
-        static stackless_coroutine_handle<void> doStepImpl(void* selfPtr)
-        {
-            auto* self = static_cast<CoroFrame*>(selfPtr);
-            switch (self->suspendIdx_)
+        case CoroFrameBase::CO_NO_TRY_BLOCK:
             {
-            case 0: break;
-            case 1: goto label_1;
-            case 10: goto label_catch_0;
-            case 11: goto label_catch_1;
-            case 12: goto label_try_end_0;
+                // An exception has occured outside any explicit try-catch block,
+                // but we don't have any further information. We thus have to possibly destroy all
+                // members except for `parsed_` (which is defined inside the try-block, and
+                // therefore in all cases already has been destroyed.
+                auto* self = this;
+                DESTROY_IF_CONSTRUCTED(end_);
+                DESTROY_IF_CONSTRUCTED(it_);
+                DESTROY_IF_CONSTRUCTED(initial_awaiter_);
+                return this->await_final_suspend();
             }
-
-            CO_GET(initial_awaiter_).await_resume();
-            self->initial_awaiter_.destroy();
-            CO_INIT(it_, (self->strings_.begin()));
-            CO_INIT(end_, (self->strings_.end()));
-            for (; CO_GET(it_) != CO_GET(end_); ++CO_GET(it_))
-            {
-                // try {
-                CO_INIT(parsed_, (-1));
-                TRY_BEGIN(0);
-                CO_GET(parsed_) = std::stoi(*CO_GET(it_));
-                goto label_try_end_0;
-                // } catch (...) {
-                label_catch_0:
-                    {
-                        if (!self->catch_errors_)
-                        {
-                            throw;
-                        }
-                        self->suspendIdx_ = 12;
-                        return {};
-                    }
-                label_catch_1:
-                    {
-                        if (!self->catch_errors_)
-                        {
-                            throw;
-                        }
-                        CO_GET(parsed_) = -2;
-                        self->suspendIdx_ = 12;
-                        return {};
-                    }
-
-                // End of catch clause. We deliberately `return`, because we
-                // have to end the scope of the exception stack.
-                TRY_END(CoroFrameBase::CO_NO_TRY_BLOCK, try_end_0);
-                CO_YIELD(1, initial_awaiter_, CO_GET(parsed_));
-                // }
-            }
-            self->parsed_.destroy();
-            CO_RETURN_VOID(3, final_awaiter_);
+        case 0:
+            return handleCatchClause_0();
+        default:
+            __builtin_unreachable();
         }
+    }
 
-        stackless_coroutine_handle<void> dispatchExceptionHandling()
-        {
-            switch (this->currentTryBlock_)
-            {
-            case CoroFrameBase::CO_NO_TRY_BLOCK:
-                // Unhandled exception: store in promise, clean up locals, enter final suspend.
-                it_.destroy();
-                end_.destroy();
-                this->setDone();
-                this->promise().unhandled_exception();
-                {
-                    auto* self = this;
-                CO_RETURN_IMPL_IMPL(final_awaiter_);
-                }
-            case 0:
-                return handleCatchClause_0();
-            default:
-                __builtin_unreachable();
+      // Implementation for the catch clauses of the first (and only) try-catch block.
+    stackless_coroutine_handle<void> handleCatchClause_0() {
+        // No more parent try-catch block from here on.
+      this->currentTryBlock_ = CoroFrameBase::CO_NO_TRY_BLOCK;
+      try {
+          auto* self = this;
+          DESTROY_IF_CONSTRUCTED(parsed_);
+          // If none of the catch clauses contains a `break/continue/co_return`, then
+          // we resume after the try-catch block.
+          this->suspendIdx = 12;
+        try {
+            // Rethrow the exception and use the original catch clauses with `continue`
+            // and `break` rewritten.
+          throw;
+        } catch (const std::invalid_argument&) {
+            if (!catch_errors_) {
+                this->suspendIdx_ = 20;
+            }
+        } catch (const std::out_of_range&) {
+            if (!catch_errors_) {
+                this->suspendIdx_ = 21;
             }
         }
+          // If we reach here, then we have caught the exception and correctly
+          // set up the `suspendIdx_`, so we can just continue running our coroutine.
+        return this->doStepImpl(this);
+      } catch (...) {
+        return dispatchExceptionHandling();
+      }
+    }
 
-        stackless_coroutine_handle<void> handleCatchClause_0()
-        {
-            this->currentTryBlock_ = CoroFrameBase::CO_NO_TRY_BLOCK;
-            try {
-            try
-            {
-               throw;
-            } catch (const std::invalid_argument&)
-            {
-                this->suspendIdx_ = 10;
-            } catch (const std::out_of_range&)
-            {
-                this->suspendIdx_ = 11;
-            }
-                auto handled = this->doStepImpl(this);
-                return this->doStepImpl(this);
-            } catch (...)
-            {
-                return dispatchExceptionHandling();
-            }
-        }
-
-        void destroySuspendedCoro(size_t suspendIdx_)
-        {
-            switch (suspendIdx_)
-            {
-            case 0:
-                this->initial_awaiter_.destroy();
-                return;
-            case 1:
-                this->initial_awaiter_.destroy();
-                it_.destroy();
-                end_.destroy();
-                return;
-            case 2:
-                this->initial_awaiter_.destroy();
-                it_.destroy();
-                end_.destroy();
-                return;
-            case 3:
-                return;
-            }
-        }
-    };
-    return CoroFrame::ramp(std::forward<RangeOfStrings>(strings), catch_errors);
+    void destroySuspendedCoro(size_t suspendIdx_) {
+      switch (suspendIdx_) {
+        case 0:
+          this->initial_awaiter_.destroy();
+          return;
+        case 1:
+          this->initial_awaiter_.destroy();
+          parsed_.destroy();
+          it_.destroy();
+          end_.destroy();
+          return;
+        case 2:
+          return;
+      }
+    }
+  };
+  return CoroFrame::ramp(std::forward<RangeOfStrings>(strings), catch_errors);
 }
 
-#endif //GENERATOR_REWRITE_EXAMPLES_THROWING_PARSE_INTS_H
+#endif  // GENERATOR_REWRITE_EXAMPLES_THROWING_PARSE_INTS_H
