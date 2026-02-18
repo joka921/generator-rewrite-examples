@@ -79,7 +79,7 @@ struct stackless_coro_crtp {
   {
       // Destroy and delete the `Derived` object itself (it was allocated on the heap via the `ramp()`
       // below.
-      this->~Derived();
+      derived().~Derived();
       if constexpr (coro_detail::has_promise_delete<PromiseType>::value) {
           PromiseType::operator delete(static_cast<void*>(this), sizeof(Derived));
       } else if constexpr (coro_detail::has_promise_delete_unsized<PromiseType>::value) {
@@ -128,7 +128,7 @@ struct stackless_coro_crtp {
       }
         // As the `handleException` function only catches exceptions and then returns, we have to do
         // another step, as nobody has actually suspended the coroutine. We don't do another step if
-        // the frame is `done` which can happen either for uncaught excep
+        // the frame is `done` which can happen either for uncaught exceptions, or for exp
         if (!derived.done())
         {
             assert(!ret);
