@@ -63,9 +63,9 @@ heap_generator<int> throwing_parse_ints(RangeOfStrings&& strings, bool catch_err
         // States:
         //   0  = initial_suspend
         //   1  = co_yield inside try (after stoi)
-        //   2  = co_yield inside catch (the -1 fallback)
-        //   3  = co_return
-        //   10 = catch handler entry
+        //   12 = after the `try-catch` block (target when an exception has been caught, and the catch-clause does neither `continue/break/co_return`.
+        //  20 = at the end of the loop body (target for `continue`)
+        //  21 = after the loop body (target for `break`)
         stackless_coroutine_handle<void> doStepImpl()
         {
             switch (this->suspendIdx_)
